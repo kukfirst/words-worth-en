@@ -1,0 +1,33 @@
+{
+ "name": "SHP_5I.MES--to--FLOOR05.MES",
+ "kind": "fixed",
+ "keys": [
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "down",
+   6,
+   36
+  ],
+  [
+   "down",
+   6,
+   36
+  ],
+  [
+   "return_key",
+   6,
+   36
+  ]
+ ],
+ "from_scene": "SHP_5I.MES",
+ "to_scene": "FLOOR05.MES",
+ "to_stack_min": null,
+ "note": "recorded on run 1789056665 life 0",
+ "recorded": 1789057914.5229266,
+ "runs": 0,
+ "ok": 0
+}

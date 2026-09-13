@@ -1,0 +1,93 @@
+{
+ "name": "FLOOR05.MES:ja--to--CAMP.MES",
+ "kind": "fixed",
+ "keys": [
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "left",
+   6,
+   36
+  ],
+  [
+   "right",
+   6,
+   36
+  ],
+  [
+   "down",
+   6,
+   36
+  ],
+  [
+   "escape",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "left",
+   6,
+   36
+  ],
+  [
+   "right",
+   6,
+   36
+  ],
+  [
+   "down",
+   6,
+   36
+  ],
+  [
+   "escape",
+   6,
+   36
+  ]
+ ],
+ "from_scene": "FLOOR05.MES:ja",
+ "to_scene": "CAMP.MES",
+ "to_stack_min": null,
+ "note": "recorded on run 1788862162 life 0",
+ "recorded": 1788862400.739424,
+ "runs": 0,
+ "ok": 0
+}

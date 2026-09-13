@@ -1,0 +1,23 @@
+{
+ "name": "G_OVER.MES--to--FLOOR05.MES:ja",
+ "kind": "fixed",
+ "keys": [
+  [
+   "return_key",
+   6,
+   36
+  ],
+  [
+   "return_key",
+   6,
+   36
+  ]
+ ],
+ "from_scene": "G_OVER.MES",
+ "to_scene": "FLOOR05.MES:ja",
+ "to_stack_min": null,
+ "note": "recorded on run 1788916724 life 0",
+ "recorded": 1788918232.9280171,
+ "runs": 0,
+ "ok": 0
+}

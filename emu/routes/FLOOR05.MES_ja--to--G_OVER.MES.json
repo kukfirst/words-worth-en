@@ -1,0 +1,123 @@
+{
+ "name": "FLOOR05.MES:ja--to--G_OVER.MES",
+ "kind": "fixed",
+ "keys": [
+  [
+   "right",
+   6,
+   36
+  ],
+  [
+   "left",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "left",
+   6,
+   36
+  ],
+  [
+   "right",
+   6,
+   36
+  ],
+  [
+   "down",
+   6,
+   36
+  ],
+  [
+   "return_key",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "left",
+   6,
+   36
+  ],
+  [
+   "right",
+   6,
+   36
+  ],
+  [
+   "down",
+   6,
+   36
+  ],
+  [
+   "return_key",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "left",
+   6,
+   36
+  ]
+ ],
+ "from_scene": "FLOOR05.MES:ja",
+ "to_scene": "G_OVER.MES",
+ "to_stack_min": null,
+ "note": "recorded on run 1788864837 life 0",
+ "recorded": 1788865503.7312303,
+ "runs": 0,
+ "ok": 0
+}

@@ -1,0 +1,18 @@
+{
+ "name": "CAMP.MES--to--FLOOR05.MES:ja",
+ "kind": "fixed",
+ "keys": [
+  [
+   "escape",
+   6,
+   36
+  ]
+ ],
+ "from_scene": "CAMP.MES",
+ "to_scene": "FLOOR05.MES:ja",
+ "to_stack_min": null,
+ "note": "recorded on run 1788861853 life 0",
+ "recorded": 1788862141.4739945,
+ "runs": 0,
+ "ok": 0
+}

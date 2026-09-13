@@ -1,0 +1,43 @@
+{
+ "name": "FLOOR05D.MES--to--FLOOR05.MES:ja",
+ "kind": "fixed",
+ "keys": [
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ]
+ ],
+ "from_scene": "FLOOR05D.MES",
+ "to_scene": "FLOOR05.MES:ja",
+ "to_stack_min": null,
+ "note": "recorded on run 1788923849 life 0",
+ "recorded": 1788925251.6408238,
+ "runs": 0,
+ "ok": 0
+}

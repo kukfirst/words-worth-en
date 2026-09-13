@@ -1,0 +1,68 @@
+{
+ "name": "cold-boot--to--first-room",
+ "kind": "fixed",
+ "keys": [
+  [
+   "down",
+   8,
+   150
+  ],
+  [
+   "down",
+   8,
+   150
+  ],
+  [
+   "return_key",
+   8,
+   150
+  ],
+  [
+   "return_key",
+   8,
+   150
+  ],
+  [
+   "return_key",
+   8,
+   260
+  ],
+  [
+   "return_key",
+   8,
+   200
+  ],
+  [
+   "return_key",
+   8,
+   200
+  ],
+  [
+   "return_key",
+   8,
+   200
+  ],
+  [
+   "return_key",
+   8,
+   200
+  ],
+  [
+   "return_key",
+   8,
+   200
+  ],
+  [
+   "return_key",
+   8,
+   200
+  ]
+ ],
+ "from_scene": null,
+ "to_scene": null,
+ "to_stack_min": 2,
+ "note": "verified recipe from boot.py; return_key confirms every startup screen",
+ "recorded": 1788861686.5528295,
+ "runs": 0,
+ "ok": 0
+}

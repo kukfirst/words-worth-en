@@ -1,0 +1,28 @@
+{
+ "name": "CAMP.MES--to--FLOOR05.MES",
+ "kind": "fixed",
+ "keys": [
+  [
+   "down",
+   6,
+   36
+  ],
+  [
+   "down",
+   6,
+   36
+  ],
+  [
+   "return_key",
+   6,
+   36
+  ]
+ ],
+ "from_scene": "CAMP.MES",
+ "to_scene": "FLOOR05.MES",
+ "to_stack_min": null,
+ "note": "recorded on run 1789008144 life 0",
+ "recorded": 1789008892.6817102,
+ "runs": 0,
+ "ok": 0
+}

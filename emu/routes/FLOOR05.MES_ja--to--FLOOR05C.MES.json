@@ -1,0 +1,68 @@
+{
+ "name": "FLOOR05.MES:ja--to--FLOOR05C.MES",
+ "kind": "fixed",
+ "keys": [
+  [
+   "left",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "left",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ],
+  [
+   "up",
+   6,
+   36
+  ]
+ ],
+ "from_scene": "FLOOR05.MES:ja",
+ "to_scene": "FLOOR05C.MES",
+ "to_stack_min": null,
+ "note": "recorded on run 1788908281 life 0",
+ "recorded": 1788911570.3024998,
+ "runs": 0,
+ "ok": 0
+}

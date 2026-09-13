@@ -1,0 +1,30 @@
+# ⚠️ Игра и её текст сюда не попадают НИКОГДА. Первая сеть -- экспорт
+# (tools/export_public.py), эта -- вторая, на случай ручного копирования.
+*.hdi
+*.hdm
+*.d88
+*.xdf
+*.mes
+*.rkt
+game/
+work/
+en/
+units.json
+emu/text_index.json
+progress.jsonl
+*.jsonl
+
+# juice тянется скриптом, а не лежит в репозитории: у него нет лицензии
+tools/juice/
+
+# рабочий мусор
+__pycache__/
+*.pyc
+.venv*/
+*.log
+*.state
+emu/replay/
+emu/shots/
+emu/rec/
+emu/save/
+emu/system/

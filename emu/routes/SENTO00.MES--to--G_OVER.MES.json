@@ -1,0 +1,43 @@
+{
+ "name": "SENTO00.MES--to--G_OVER.MES",
+ "kind": "fixed",
+ "keys": [
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "space",
+   6,
+   36
+  ],
+  [
+   "return_key",
+   6,
+   36
+  ]
+ ],
+ "from_scene": "SENTO00.MES",
+ "to_scene": "G_OVER.MES",
+ "to_stack_min": null,
+ "note": "recorded on run 1788916724 life 0",
+ "recorded": 1788918191.1728446,
+ "runs": 0,
+ "ok": 0
+}
