@@ -28,3 +28,6 @@ emu/shots/
 emu/rec/
 emu/save/
 emu/system/
+
+# экспорт текста для вычитки — сюда не кладём
+text/

@@ -79,6 +79,45 @@ instruction once passed every static gate and killed the game on scene load.
 
 Numbers, defects found and the reasoning behind each decision are in the working log, not here.
 
+## Proofreading
+
+If you were sent a copy of this tree as an archive, it contains a `text/` directory that is
+**not** in the public repository. That is the whole English script, flattened for reading:
+one entry per line, with the line as it will actually land in the game's 56-column window.
+
+```json
+{
+ "id": "FLOOR02.MES#41",
+ "en": "[{0}]: My, my head's spinning... Someone cast a\nspell on me.",
+ "was": "fd514727",
+ "screen": ["[xxxxxx]: My, my head's spinning... Someone cast a",
+            "spell on me."]
+}
+```
+
+`screen` is produced by a model of elf's compiler and of the engine's message window, checked
+against real captured frames — so a broken line break is visible without running the game.
+`xxxxxx` stands for the hero's name, which the engine substitutes at runtime.
+
+**To proofread:** edit the `en` fields. Leave `id` and `was` alone — `was` is a fingerprint of
+the line you started from, and it is what proves you edited the line you meant to. Then:
+
+```sh
+python3 tools/import_text.py            # show what changed, and what was refused
+python3 tools/import_text.py --apply    # write it back and recompile
+python3 tools/export_text.py            # regenerate text/ from the current scripts
+```
+
+Every changed line is checked before anything is written: the `{0}` markers must survive
+unchanged, the characters must exist in the game's own character set, the line must still fit
+the window without breaking a word, the fingerprint must match, and the recompiled script must
+stay under the engine's buffer. **If any line fails, nothing is written at all** — half of an
+accepted proofread is worse than none, because afterwards you cannot tell what landed.
+
+⚠️ `text/` is deliberately absent from the repository and listed in `.gitignore`: it is the
+game's text, and the reason this scene distributes patches rather than scripts. Please keep it
+out of public places.
+
 ## Requirements
 
 | | |
