@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
-"""Вернуть пробел там, где число печатается вплотную к слову.
+"""Return a space where a number is printed flush against a word.
 
-## Что сломано
+## What's broken
 
-Число печатается ОТДЕЛЬНОЙ инструкцией, следом за текстом:
+The number is printed by a SEPARATE instruction, right after the text:
 
     (text "[Dark Fortune Teller]: I see it!!... Your Speed is")
     (text (number (~ M 5)) "!!")
 
-По-японски так и надо -- `すばやさは` кончается частицей, и число липнет к ней законно.
-По-английски выходит `Your Speed is34!!`. То же в бою: `HP198 HP restored.`
+In Japanese this is correct -- `すばやさは` ends with a particle, and the number legitimately sticks to it.
+In English you get `Your Speed is34!!`. Same thing in combat: `HP198 HP restored.`
 
-⚠️ Почему не поймал ни один гейт. Гейт раскладки судит ФОРМУ, а здесь их две, и каждая
-сама по себе безупречна. `gate_edges` смотрит знак после маркера `{0}` -- маркера тут нет.
-Число вообще не входит в текст формы: `printed()` подставляет на его место `?`, и стык
-двух инструкций не проверял никто. Найдено игроком на кадре, 2026-09-15.
+⚠️ Why no gate caught this. The layout gate judges the FORM, and there are two here, and each
+one is flawless on its own. `gate_edges` checks the character after the marker `{0}` -- there is no marker here.
+The number doesn't even enter the form's text: `printed()` substitutes `?` in its place, and the seam
+between the two instructions was never checked. Found by a player on a frame, 2026-09-15.
 
-⚠️ Кадры это ВИДЕЛИ и были прочитаны -- `|HP1?? was restored.|`, -- но `screenqa` отметил
-только «нечитаемое знакоместо» (цифры 6-9 не в эталонах шрифта), и слипшийся текст рядом
-остался незамеченным. Отчёт, который прячет находку за соседней жалобой, -- плохой отчёт.
+⚠️ Frames SAW this and it was read -- `|HP1?? was restored.|`, -- but `screenqa` only flagged
+"unreadable character slot" (digits 6-9 not in font reference), and the stuck-together text next to it
+went unnoticed. A report that hides a finding behind a neighboring complaint is a bad report.
 
-## Где пробел НЕ нужен
+## Where a space is NOT needed
 
-Если между текстом и числом переставлен курсор (`set-arr~ @ 17` -- строка/колонка окна,
-`@ 21` -- координаты в меню), то число печатается в СВОЕЙ позиции, и пробел только сдвинет
-колонку. Это меню магазина (`Healing Herb` … цена) и панель. Такие места не трогаются --
-признак берётся из кода, а не из списка имён файлов.
+If the cursor is repositioned between the text and the number (`set-arr~ @ 17` -- window row/column,
+`@ 21` -- coordinates in the menu), then the number is printed at ITS OWN position, and a space would only
+shift the column. This is the shop menu (`Healing Herb` … price) and the panel. Such places are left alone --
+the criterion is taken from the code, not from a list of filenames.
 
-    tools/numfix.py            # показать
-    tools/numfix.py --apply    # записать и пересобрать
+    tools/numfix.py            # show
+    tools/numfix.py --apply    # write and rebuild
 """
 import argparse
 import pathlib
@@ -42,11 +42,11 @@ import gates                                                        # noqa: E402
 
 EN = ROOT / 'en'
 
-# ⚠️ Пробела МАЛО. Вставить его в `"HP" + N + " HP restored."` -- значит получить
-# «HP 198 HP restored.» с двойным HP, а в `"…'s HP" + N + " point recovered!!"` --
-# «…'s HP 8 point recovered!!». Японский ставит число между частицами, английский так не
-# умеет; фразу надо ПЕРЕСОБРАТЬ вокруг числа. Пары «что было до числа / что после» ->
-# «что станет». Список не выдуман: он снят пересчётом всех 97 мест.
+# ⚠️ Space is MISSING. Inserting it into `"HP" + N + " HP restored."` means to get
+# "HP 198 HP restored." has HP doubled, while in `"…'s HP" + N + " point recovered!!"` --
+# «…'s HP 8 point recovered!!». Japanese puts the number between the particles, English doesn't
+# it can; the phrase must be REBUILT around the number. Pairs of "what was before the number / what was after" ->
+# "what will become". The list is not made up: it was derived by recomputing all 97 points.
 PHRASES = {
     ('HP', ' was restored.'):            ('HP restored by ', '.'),
     ('HP', ' HP restored.'):             ('HP restored by ', '.'),
@@ -72,14 +72,14 @@ PHRASES = {
         ("The Shadow Saint's HP restored by ", '!!'),
 }
 
-# Курсор переставлен -> число идёт в свою колонку, слипнуться не с чем.
+# Cursor repositioned -> the number goes into its own column, nothing to merge with.
 MOVED = re.compile(r'set-arr~ @ (?:17|21)\b')
-# Печать прервана -> число начнёт новую строку или новое окно.
+# Print interrupted -> the number will start a new line or a new window.
 BREAKS = re.compile(r'\(wait|\(clear|proc 28\b|proc 10\b')
 
 
 def sites(src):
-    """[(спан литерала ДО числа, его текст, спан литерала ПОСЛЕ, его текст)]."""
+    """[(span of the literal before the number, its text, span of the literal after the number, its text)]."""
     spans = [(m.start(), close(src, m.start()) + 1) for m in re.finditer(r'\(text\b', src)]
     out = []
     for (a, e), (na, ne) in zip(spans, spans[1:]):
@@ -103,7 +103,7 @@ def sites(src):
 
 
 def rewrite(tail, head):
-    """Как переписать пару вокруг числа. None -- хватит одного пробела."""
+    """How to rewrite a pair around a number. None -- one space is enough."""
     key = (tail.strip(), head)
     if key in PHRASES:
         return PHRASES[key]
@@ -125,31 +125,31 @@ def main(names, apply):
             if new and aft:
                 edits.append((ba, be, new[0]))
                 edits.append((aft[0], aft[1], new[1]))
-                shown = f'{new[0]!r} + число + {new[1]!r}'
+                shown = f'{new[0]!r} + number + {new[1]!r}'
             else:
                 edits.append((ba, be, tail + ' '))
-                shown = f'{tail[-30:] + " "!r} + число'
+                shown = f'{tail[-30:] + " "!r} + number'
             if len(touched) <= 4 and len(edits) <= 4:
-                print(f'  {name:16} …{tail[-30:]!r} + число  ->  {shown}')
+                print(f'  {name:16} …{tail[-30:]!r} + number  ->  {shown}')
         if apply:
             for a2, b2, txt in sorted(edits, reverse=True):
                 src = src[:a2] + txt + src[b2:]
             (EN / f'{name}.rkt').write_text(src, encoding='utf-8')
-    print(f'\nмест: {total}, файлов: {len(touched)}')
+    print(f'\nspots: {total}, files: {len(touched)}')
     if not apply:
-        print('НЕ ЗАПИСАНО. Применить: tools/numfix.py --apply')
+        print('NOT WRITTEN. Apply: tools/numfix.py --apply')
         return 0
-    print('\nпересборка:')
+    print('\nrebuild:')
     bad = 0
     for name in touched:
         gates.juice(['-cf', f'{name}.rkt'], EN)
         mes = EN / f'{name}.rkt.mes'
         n = mes.stat().st_size if mes.exists() else 0
-        over = ' ⚠️ ЗА ПОРОГОМ' if n > gates.MES_MAX else ''
+        over = '⚠️ OVER THRESHOLD' if n > gates.MES_MAX else ''
         if not n or over:
             bad += 1
-            print(f'  {name:16} {n} б{over}', flush=True)
-    print(f'{"❌ провалов: " + str(bad) if bad else "✅ все пересобрались под порогом"}')
+            print(f'  {name:16} {n} b{over}', flush=True)
+    print(f'{"❌ failures:" + str(bad) if bad else "✅ all rebuilt under threshold"}')
     return 1 if bad else 0
 
 

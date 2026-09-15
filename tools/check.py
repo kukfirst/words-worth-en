@@ -65,10 +65,10 @@ def problems(row):
 
     why = flaws(screen(parts_of(en), w=None, col0=screen_col), col0=screen_col)
     if why:
-        names = {'слово разорвано': 'a word is broken in half',
-                 'строка шире поля текста': 'the line is wider than the window',
-                 'слово-сирота': 'a single word left alone on its own line',
-                 'дыра в строке': 'a gap in the middle of the line'}
+        names = {'Word broken': 'a word is broken in half',
+                 'line is wider than the text field': 'the line is wider than the window',
+                 'orphaned word': 'a single word left alone on its own line',
+                 'gap in line': 'a gap in the middle of the line'}
         out.append('layout: ' + ', '.join(sorted({names.get(w, w) for w in why})))
     return out
 

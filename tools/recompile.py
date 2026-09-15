@@ -25,29 +25,29 @@ if running:
 skipped = [n for n in names if busy and busy.startswith(n)]
 names = [n for n in names if n not in skipped]
 if skipped:
-    print(f'  ⏭️  пропущен (его прямо сейчас пишет конвейер): {", ".join(skipped)}')
+    print(f'  ⏭️  skipped (the pipeline is writing it right now): {", ".join(skipped)}')
 ok = bad = 0
 for n in names:
     src = (EN / f'{n}.rkt').read_text(encoding='utf-8')
-    new, nfix = number_fix(src)          # цифры в окне сообщения -- половинками глифов без этого
+    new, nfix = number_fix(src)          # digits in the message window -- half-glyphs without this
     new = rebuild_dict(new)
     if new != src:
         (EN / f'{n}.rkt').write_text(new, encoding='utf-8')
-    # ⚠️ У спутника разреза (tools/split.py) японского оригинала нет и быть не может --
-    # такого файла в игре не существовало. Сверять скелет не с чем, гейт структуры для
-    # него неприменим по определению; остаются компиляция и размер.
+    # ⚠️ A split satellite (tools/split.py) has no Japanese original and can't have one --
+    # no such file ever existed in the game. There's nothing to check the skeleton against,
+    # the structure gate is inapplicable to it by definition; what's left is compilation and size.
     if (EN / f'{n}.orig.rkt').exists():
-        # ⚠️ У разрезанного родителя скелет расходится с оригиналом ПО ПОСТРОЕНИЮ: тело
-        # ветки заменено на (mes-call ..). Обычный гейт объявлял такой файл сломанным
-        # (ok=84 bad=9 сразу после разреза девяти комнат). Сверяем реконструкцию --
-        # split.gate_split_parent() возвращает тела из спутников и сравнивает с японским
-        # оригиналом, а обратимость компиляции проверяет отдельным звеном.
+        # ⚠️ A split parent's skeleton diverges from the original BY CONSTRUCTION: the branch
+        # body is replaced with (mes-call ..). The usual gate declared such a file broken
+        # (ok=84 bad=9 right after splitting nine rooms). We check the reconstruction instead --
+        # split.gate_split_parent() pulls bodies back from the satellites and compares them
+        # against the Japanese original, while compile reversibility is checked as a separate link.
         if split.companions(n):
-            # ⚠️ gate_split_parent() компилирует во ВРЕМЕННЫЙ каталог, а не в en/. Без
-            # этой строки en/<имя>.rkt.mes у разрезанных родителей оставался с момента
-            # разреза, сборка образа брала его как есть, и в игру уезжал текст без
-            # последующих правок. Поймано снимком: буква заезжала за край окна, хотя
-            # добивка в исходнике стояла. Было устаревших 10 из 11.
+            # ⚠️ gate_split_parent() compiles into a TEMPORARY directory, not into en/. Without
+            # this line en/<name>.rkt.mes for split parents was left over from the moment of the
+            # split, image assembly picked it up as-is, and text without its later edits shipped
+            # into the game. Caught by a screenshot: a letter ran past the window edge even though
+            # the padding was there in the source. 10 out of 11 were stale.
             gates.juice(['-cf', f'{n}.rkt'], EN)
             g = split.gate_split_parent(n)
         else:
@@ -60,10 +60,10 @@ for n in names:
              else f'compile failed: {(r.stderr or r.stdout).strip()[:200]}')
         orig = 0
     size = (EN / f'{n}.rkt.mes').stat().st_size if (EN / f'{n}.rkt.mes').exists() else 0
-    where = (f'(оригинал {orig:6d}, {100*size/orig:5.0f}%)' if orig else '(спутник разреза)')
+    where = (f'(original {orig:6d}, {100*size/orig:5.0f}%)' if orig else '(cut satellite)')
     print(f"  {'✅' if not g else '❌'} {n:16s} {size:6d} b {where}"
-          + (f'  цифр обёрнуто {nfix}' if nfix else '')
+          + (f'  digits wrapped {nfix}' if nfix else '')
           + ('' if not g else f'  {str(g)[:70]}'), flush=True)
     ok += not g
     bad += bool(g)
-print(f'итого ok={ok} bad={bad}' + (f' пропущено={len(skipped)}' if skipped else ''))
+print(f'total ok={ok} bad={bad}' + (f' skipped={len(skipped)}' if skipped else ''))

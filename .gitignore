@@ -1,5 +1,5 @@
-# ⚠️ Игра и её текст сюда не попадают НИКОГДА. Первая сеть -- экспорт
-# (tools/export_public.py), эта -- вторая, на случай ручного копирования.
+# ⚠️ The game and its script NEVER go in here. The first net is the export
+# (tools/export_public.py); this is the second, in case of a manual copy.
 *.hdi
 *.hdm
 *.d88
@@ -14,10 +14,10 @@ emu/text_index.json
 progress.jsonl
 *.jsonl
 
-# juice тянется скриптом, а не лежит в репозитории: у него нет лицензии
+# juice is fetched by a script, not vendored here: it has no licence
 tools/juice/
 
-# рабочий мусор
+# working clutter
 __pycache__/
 *.pyc
 .venv*/
@@ -29,5 +29,5 @@ emu/rec/
 emu/save/
 emu/system/
 
-# экспорт текста для вычитки — сюда не кладём
+# the proofreading text export -- never committed
 text/

@@ -1,36 +1,37 @@
 #!/usr/bin/env python3
-"""Реплики магазинов: убрать добивку по числу и собрать вопрос о покупке заново.
+"""Shop dialogue: strip the number-width padding and rebuild the purchase question from scratch.
 
-## Два дефекта, оба видны игроку в лавке
+## Two defects, both visible to the player in the shop
 
-**1. Добивка по числу неизвестной ширины.** `render.pad_breaks` дотягивает строку пробелами
-до края окна, считая `(number …)` шириной шесть знаков. На экране число бывает любым: при
-`260` строка выходит на три знака короче, движок дотягивает её следующим словом и рвёт по
-краю окна. Кадр `emu/replay/3850_return_key.png`:
+**1. Padding for an unknown-width number.** `render.pad_breaks` pads the line out to the window
+edge with spaces, treating `(number …)` as six characters wide. On screen the number can be
+anything: with `260` the line comes out three characters shorter, the engine stretches it with
+the next word, and it tears at the window edge. Frame `emu/replay/3850_return_key.png`:
 
     [Item Shop Owner]: All together that's 260 gold, ya  kno
     w...
 
-Дыра посреди строки -- это и есть добивка. Починить добивку нельзя: ширина числа известна
-только в игре. Поэтому реплики укорочены так, чтобы при ПЯТИЗНАЧНОМ числе перенос не
-требовался вовсе -- тогда добивки нет и рвать нечего. Порог -- `render.LINE` (55).
+The gap in the middle of the line is that padding. The padding itself can't be fixed: the
+number's width is only known in-game. So the lines are shortened so that a FIVE-DIGIT number
+never needs to wrap at all -- then there's no padding, and nothing to tear. Threshold is
+`render.LINE` (55).
 
-**2. Вопрос о покупке собран из независимо переведённых половин.** Открывающая кавычка в
-одной форме, закрывающая -- в восьми ветках `(if (== V n) …)`, хвост -- в девятой. Половины
-переводились порознь, поэтому кавычка открывалась `'`, а закрывалась `"`, порядок слов
-рассыпался, а в SHP_5I в слот предмета заехал кусок вопроса:
+**2. The purchase question is assembled from independently translated halves.** The opening
+quote is in one form, the closing one in eight `(if (== V n) …)` branches, the tail in the
+ninth. The halves were translated separately, so the quote opened with `'` and closed with `"`,
+word order fell apart, and in SHP_5I a chunk of the question landed in the item slot:
 
     [Item Shop Owner]: ' all Healing Herbs'  will you buy?
     [Item Shop Owner]: ' Gold Bar", will you buy max\n?
 
-Собрано заново по одной схеме на все шесть лавок: `<Кто>: Buy 'Предмет'?` и
-`<Кто>: Buy all 'Предметы'?`.
+Rebuilt from scratch on one schema for all six shops: `<Who>: Buy 'Item'?` and
+`<Who>: Buy all 'Items'?`.
 
-⚠️ Меняется ТОЛЬКО содержимое строк -- ни одной инструкции не добавлено и не убрано,
-поэтому структурный гейт (`gates.gate_compile_and_structure`) видит прежний скелет.
+⚠️ ONLY line contents change -- not a single instruction is added or removed, so the
+structural gate (`gates.gate_compile_and_structure`) sees the same skeleton.
 
-    tools/shopfix.py --check    # показать, что будет заменено
-    tools/shopfix.py --apply    # записать
+    tools/shopfix.py --check    # show what would be replaced
+    tools/shopfix.py --apply    # write it
 """
 import argparse
 import pathlib
@@ -39,8 +40,8 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 EN = ROOT / 'en'
 
-# ---------------------------------------------------------------- денежные реплики
-# (файл, старое, новое, сколько раз ожидается)
+# ---------------------------------------------------------------- money phrases
+# (file, old, new, how many times expected)
 MONEY = [
     ('KANKIN', '" gold total... Come back  when you find more."',
      '" gold in all. Come back."', 2),
@@ -60,8 +61,8 @@ MONEY = [
     ('SHP_5B', '" gold for that one."', '" gold for it."', 1),
 ]
 
-# ---------------------------------------------------------------- вопрос о покупке
-# Одна схема на все лавки: <Кто>: Buy 'Предмет'?  /  <Кто>: Buy all 'Предметы'?
+# ---------------------------------------------------------------- purchase question
+# One schema for all benches: <Who>: Buy 'Item'?  /  <Who>: Buy all 'Items'?
 ITEMS = {
     0: "'Healing Herb'",         1: "all 'Healing Herbs'",
     2: "'Stamina Herb'",         3: "all 'Stamina Herbs'",
@@ -82,7 +83,7 @@ BUY = {
     'SHP_5I': ('"[Item Shop Owner]: \'"', '"[Item Shop Owner]: Buy "',
                '"\\n?"', ITEMS),
 }
-# Старые тексты веток -- как они лежат сейчас, по файлам. Ключ -- номер ветки.
+# Legacy branch texts — as they are currently stored, per file. Key is the branch number.
 OLD_BRANCH = {
     'SHP_0I': {0: '"Healing Herb\' "', 1: '" all Healing Herbs\' "',
                2: '"Stamina Herb\\""', 3: '" all Stamina Herbs\\""',
@@ -112,19 +113,19 @@ OLD_BRANCH = {
                7: '" Ascension Stone\\", will you buy max"'},
 }
 
-# ---------------------------------------------------------------- вопрос о продаже
-# Мелочь того же класса: ведущий пробел внутри кавычек и пробел перед закрывающей.
+# ---------------------------------------------------------------- sale question
+# A nit of the same kind: a leading space inside quotes and a space before the closing one.
 SELL = [
     ('SHP_0I', '(text " \' - will you sell it?")', '(text "\' - will you sell it?")', 1),
     ('SHP_2I', '(if (== V 3) (<> (text " Ascension Stone")))',
      '(if (== V 3) (<> (text "Ascension Stone")))', 1),
 ]
 
-# ---------------------------------------------------------------- «применил предмет» в бою
-# Тот же класс: <имя> + связка + <предмет> + хвост. Связка `は、` осталась ЯПОНСКОЙ -- она
-# одна из немногих форм, где японский знак не виден гейту charset, потому что форма короткая
-# и состоит из служебных знаков. На экране выходило `Astralは、Gold Bar tried using it!!`.
-# Переставлено в порядок, который даёт связка: `Astral tried using 'Gold Bar'!!`.
+# ---------------------------------------------------------------- "used item" in combat
+# Same class: <name> + copula + <object> + tail. The copula `は、` remained JAPANESE -- it
+# one of the few forms where the Japanese character is not visible to the charset gate, because the form is short
+# and consists of control characters. The screen displayed `Astralは、Gold Bar tried using it!!`.
+# Rearranged in the order that gives the combo: `Astral tried using 'Gold Bar'!!`.
 USED = [
     ('SENTO04', '(text "は、")', '(text " tried using \'")', 1),
     ('SENTO04', '(text " tried using it!!")', '(text "\'!!")', 1),
@@ -136,11 +137,11 @@ USED = [
 
 
 def edits():
-    """[(файл, старое, новое, сколько)] -- все замены одним списком.
+    """[(file, old, new, count)] -- all replacements in one list.
 
-    ⚠️ Открывающая форма `(text "[Item Shop Owner]: '")` есть в файле ДВАЖДЫ -- в вопросе о
-    покупке и в вопросе о продаже. Поэтому она заменяется ВМЕСТЕ с первой веткой: такая пара
-    в файле одна.
+    ⚠️ The opening form `(text "[Item Shop Owner]: '")` appears in the file TWICE -- in the
+    buy question and in the sell question. So it is replaced TOGETHER with the first branch:
+    this pair is unique in the file.
     """
     out = list(MONEY)
     for fn, (lead_old, lead_new, tail_old, items) in BUY.items():
@@ -169,23 +170,23 @@ def main(apply):
         for old, new, want in rows:
             got = src.count(old)
             if got != want:
-                # ⚠️ ИДЕМПОТЕНТНОСТЬ. Старого текста нет, а новый на месте -- правка уже
-                # применена, и это не провал: иначе повторный прогон (а он неизбежен, правки
-                # идут волнами) объявляет сломанным то, что сам же и починил.
+                # ⚠️ IDEMPOTENCY. Old text is gone, new text is in place -- the edit has already
+                # applied, and this is not a failure: otherwise the re-run (which is inevitable, edits
+                # come in waves) declares broken what it itself fixed.
                 if got == 0 and src.count(new) >= want:
                     done += 1
                     continue
-                print(f'  ❌ {fn}: {old[:56]} -- найдено {got}, ждали {want}')
+                print(f'  ❌ {fn}: {old[:56]} -- found {got}, expected {want}')
                 bad += 1
                 continue
             src = src.replace(old, new)
         if apply and not bad:
             p.write_text(src, encoding='utf-8')
-        note = f'замен {len(rows) - done}' + (f', уже было {done}' if done else '')
+        note = f'replaced {len(rows) - done}' + (f', already done {done}' if done else '')
         print(f'  {"✅" if not bad else "⏭️"} {fn}: {note}')
     if bad:
-        sys.exit(f'\n❌ несовпадений: {bad} -- ничего не записано')
-    print(f'\n{"записано" if apply else "НЕ ЗАПИСАНО (--apply)"}: файлов {len(by_file)}')
+        sys.exit(f'\n❌ mismatches: {bad} -- nothing written')
+    print(f'\n{"written" if apply else "NOT WRITTEN (--apply)"}: files {len(by_file)}')
 
 
 if __name__ == '__main__':

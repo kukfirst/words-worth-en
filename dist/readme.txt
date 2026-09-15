@@ -34,9 +34,18 @@ and every one of the 906 game files is byte-identical. If your image is that oth
 patch still produces a working game, but the checksum above is the one this release was built
 and tested against.
 
-On Windows, drop the image and the patch onto xdelta UI. On Linux or macOS:
+Any xdelta patcher works - the patch is plain VCDIFF with no secondary compression, so there
+is nothing an older patcher cannot read:
+
+  - Any system, in a browser: Rom Patcher JS - https://www.marcrobledo.com/RomPatcher.js/
+    Pick the image as the ROM file and the .xdelta as the patch. Nothing is uploaded.
+  - Windows: xdelta UI or Delta Patcher - drop the image and the patch onto it.
+  - Linux or macOS, command line:
 
     xdelta3 -d -s "Words Worth.hdi" words-worth-en-v1-1.xdelta "Words Worth (EN).hdi"
+
+If a patcher says "unavailable secondary compressor", you have the first v1.1 upload, which
+was compressed in a way older patchers cannot read. Download the zip again.
 
 The result is:
 

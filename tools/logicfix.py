@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Исправления ЛОГИКИ игры -- объявленные, а не тихие.
+"""Game LOGIC fixes -- declared, not silent.
 
-    tools/logicfix.py            # что применено / что нет
-    tools/logicfix.py --apply    # применить к en/*.rkt (идемпотентно)
+    tools/logicfix.py            # what was applied / what wasn't
+    tools/logicfix.py --apply    # apply to en/*.rkt (idempotent)
 
-Перевод меняет только текст, и гейт структуры (gates.py) это стережёт: любое изменение
-инструкций -- провал. Но в оригинале есть ошибки, которые игрок видит как «не работает», и
-они живут в логике скрипта. Такие правки перечислены здесь -- ЕДИНСТВЕННЫЙ источник: этот
-инструмент применяет их к переводу, а гейт -- к эталону перед сравнением. Разрешено ровно
-объявленное изменение и ничего сверх.
+Translation changes text only, and the structure gate (gates.py) enforces that: any change
+to instructions is a failure. But the original has bugs that players see as "doesn't work", and
+they live in the script logic. Such fixes are listed here -- the SINGLE source of truth: this
+tool applies them to the translation, and the gate -- to the reference before comparison. Only
+the declared change is permitted, and nothing beyond it.
 
-Каждая запись: файл, было, стало, почему -- с замером.
+Each entry: file, before, after, why -- with measurement.
 """
 import pathlib, sys
 
@@ -21,17 +21,17 @@ FIXES = {
     'START1.MES': [(
         '(&& (== (~ @ 10) 639) (== (~ @ 11) 399))',
         '(&& (== (~ @ 10) 639) (> (~ @ 11) 390))',
-        'Титульное меню: стрелки паркуют курсор `(mouse 3 639 399)`, а движок не пускает '
-        'его ниже y=391 -- замер: после «вверх» курсор в (639, 391). Подтверждение с '
-        'клавиатуры требовало y == 399 и не срабатывало НИКОГДА после стрелок, поэтому '
-        'New Game был недоступен и на японском оригинале. Порог > 390 проходит и при 391, '
-        'и при 399.',
+        'Title menu: the arrow keys park the cursor at `(mouse 3 639 399)`, but the engine '
+        'will not let it go below y=391 -- measured: after "up" the cursor sits at (639, 391). '
+        'Keyboard confirm required y == 399 and NEVER fired after using the arrows, so '
+        'New Game was unreachable on the Japanese original too. The > 390 threshold passes '
+        'at both 391 and 399.',
     )],
 }
 
 
 def fixed(name, src):
-    """Текст с применёнными исправлениями этого файла."""
+    """Text with this file's corrections applied."""
     for old, new, _ in FIXES.get(name, []):
         src = src.replace(old, new)
     return src
@@ -42,7 +42,7 @@ def status():
     for name, fixes in FIXES.items():
         src = (EN / f'{name}.rkt').read_text(encoding='utf-8')
         for old, new, why in fixes:
-            rows.append((name, 'применено' if new in src and old not in src else 'НЕТ', why[:70]))
+            rows.append((name, 'applied' if new in src and old not in src else 'NO', why[:70]))
     return rows
 
 

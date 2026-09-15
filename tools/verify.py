@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
-"""Перепроверить весь тракт одной командой -- от текста до играбельного образа.
+"""Re-verify the entire tract in one command -- from text to a playable image.
 
-    tools/verify.py              # быстрые проверки (секунды)
-    tools/verify.py --probe      # плюс запуск в эмуляторе (~2 минуты)
-    tools/verify.py --recompile  # плюс пересборка всех скриптов (~час)
-    tools/verify.py --full       # всё вместе
+    tools/verify.py              # fast checks (seconds)
+    tools/verify.py --probe      # plus emulator run (~2 minutes)
+    tools/verify.py --recompile  # plus rebuild of all scripts (~hour)
+    tools/verify.py --full       # all of the above
 
-Шаги и что каждый доказывает:
+Steps and what each one proves:
 
-| шаг | доказывает |
+| step | proves |
 |---|---|
-| раскладка | ни дыр, ни сирот, ни разорванных слов -- `tools/relayout.py --check` |
-| имена | один предмет -- одно имя во всей игре (`tools/terms.py`) |
-| экраны | что РЕАЛЬНО написано на снятых кадрах (`tools/screenqa.py`, `--screens`) |
-| размер | каждый .mes под порогом, за которым движок не переживает загрузку локации |
-| патч | `dist/patch.json` описывает ровно то, что лежит в `en/` |
-| образ | сборка из нетронутого оригинала проходит приёмку по каждому файлу |
-| чужой раздел | патч находит раздел там, где он лежит у игрока, а не там, где у нас |
-| запуск | игра грузится, доходит до боя и переживает его (`--probe`) |
+| layout | no gaps, no orphans, no broken words -- `tools/relayout.py --check` |
+| names | one item -- one name across the entire game (`tools/terms.py`) |
+| screens | what is ACTUALLY written on the captured frames (`tools/screenqa.py`, `--screens`) |
+| size | every .mes is under the threshold beyond which the engine can't survive loading a location |
+| patch | `dist/patch.json` describes exactly what sits in `en/` |
+| image | a build from the untouched original passes acceptance on every file |
+| foreign section | the patch finds the section where it actually lives on the player's side, not where it lives on ours |
+| launch | the game loads, reaches combat, and survives it (`--probe`) |
 
-Каждый шаг печатает свой вердикт; код возврата -- число провалившихся.
+Each step prints its own verdict; the exit code is the number of failures.
 """
 import argparse, hashlib, json, os, pathlib, subprocess, sys
 
@@ -33,7 +33,7 @@ def run(title, fn):
     try:
         ok, note = fn()
     except Exception as e:                                   # noqa: BLE001
-        ok, note = False, f'сорвалось: {e}'
+        ok, note = False, f'crashed: {e}'
     print(('  ✅ ' if ok else '  ❌ ') + note)
     return 0 if ok else 1
 
@@ -41,18 +41,18 @@ def run(title, fn):
 def step_layout():
     import relayout
     n = relayout.check()
-    return n == 0, f'реплик с браком раскладки: {n}'
+    return n == 0, f'lines with layout defects: {n}'
 
 
 def step_terms():
-    """Один предмет -- одно английское имя, и проверка НЕ по списку вариантов.
+    """One item -- one English name, and the check is NOT against a list of variants.
 
-    ⚠️ `terms.scan()` ищет ИЗВЕСТНЫЕ варианты (`ITEMS[...]['variants']`), то есть список,
-    написанный руками. Самопроверка это и поймала: `Healing Herb` -> `Curing Herb` прошло
-    незамеченным, потому что такого варианта в списке нет. Список устаревает молча -- ровно
-    та беда, ради которой состав публичной копии считается, а не пишется.
-    Здесь наоборот: японское имя предмета берётся из оригинала, и ЛЮБОЙ перевод, кроме
-    канона, считается расхождением -- даже тот, которого никто не предвидел.
+    ⚠️ `terms.scan()` looks up KNOWN variants (`ITEMS[...]['variants']`), i.e. a list
+    written by hand. The self-check caught exactly this: `Healing Herb` -> `Curing Herb` went
+    unnoticed because that variant is not in the list. The list goes stale silently -- which is
+    precisely the problem the public copy's composition is computed for, not hand-written.
+    Here it's the opposite: the item's Japanese name is taken from the original, and ANY translation,
+    other than the canonical one, is treated as a divergence -- even one nobody foresaw.
     """
     sys.path.insert(0, str(ROOT / 'tools'))
     import terms
@@ -76,56 +76,56 @@ def step_terms():
         if len(ja) != len(en):
             continue
         for a, b in zip(ja, en):
-            # ⚠️ Перенос строки рвёт имя пополам (`Ascension\nStone`), и сравнение по
-            # подстроке его не узнаёт: 4 ложные тревоги из 14 были именно такими.
+            # ⚠️ Line break splits the name in half (`Ascension\nStone`), and the comparison by
+            # the substring doesn't recognize it: 4 false positives out of 14 were exactly of this type.
             flat = b.replace('\n', ' ')
             for jname, want in canon.items():
                 if jname not in a or want in flat:
                     continue
-                # сокращение в окне предметов -- законно, поле не тянется
+                # abbreviation in the item window is intentional, the field doesn't stretch
                 if any(x in flat for x in box) or not flat.strip():
                     continue
-                # ⚠️ Проза -- не предмет: Фабрис рассказывает, как в горах добывают
-                # 金塊, и «gold» там уместнее «Gold Bar». Предметом считаем только то,
-                # что японский подаёт как предмет: в кавычках 『』 либо со счётчиком.
+                # ⚠️ Prose -- not a subject: Fabris describes how they mine in the mountains
+                # 金塊, and «gold» fits better there than «Gold Bar». We treat only that as an item,
+                # what Japanese presents as an item: in corner brackets 『』 or with a counter.
                 if jname not in a.replace('『', '').replace('』', '') or (
                         f'『{jname}』' not in a and '１つ' not in a and '１個' not in a):
                     continue
                 rows.append((p.name, 0, flat[:40], want))
-    return not rows, ('имена сходятся во всей игре' if not rows
-                      else f'разнобой в именах: {len(rows)}, первое {rows[0]}')
+    return not rows, ('names agree across the whole game' if not rows
+                      else f'name mismatch: {len(rows)}, first {rows[0]}')
 
 
 def step_screens():
-    """Вторая, независимая сеть: читаем окно сообщения с настоящих кадров.
+    """Second, independent network: we read the message window from actual frames.
 
-    ⚠️ Гейт по исходнику судит по МОДЕЛИ раскладки, и модель бывает неполна: дефект
-    «...for unauth / orized» проехал мимо него, потому что модель не знала про колонку,
-    с которой форма начинает печатать. Кадр это видел сразу.
+    ⚠️ The source-code gate judges by the LAYOUT MODEL, and the model can be incomplete: the defect
+    "...for unauth / orized" slipped past it because the model didn't know about the column
+    where the form starts printing. A frame would have caught this immediately.
     """
     sys.path.insert(0, str(ROOT / 'emu'))
     import screenqa
     rows, total = screenqa.scan()
     hard = screenqa.broken(rows)
-    return not hard, (f'прочитано экранов {total}, брака раскладки нет'
+    return not hard, (f'screens read: {total}, no layout defects'
                       if not hard else
-                      f'брак на кадрах: {len(hard)}, первый {hard[0][0].name} {hard[0][1][:1]}')
+                      f'defects on frames: {len(hard)}, first {hard[0][0].name} {hard[0][1][:1]}')
 
 
 def step_size():
     import gates
     bad = [(f.name, f.stat().st_size) for f in sorted((ROOT / 'en').glob('*.MES.rkt.mes'))
            if gates.gate_size(f)]
-    return not bad, (f'все {len(list((ROOT / "en").glob("*.MES.rkt.mes")))} .mes под порогом '
-                     f'{gates.MES_MAX} б' if not bad else f'за порогом: {bad[:5]}')
+    return not bad, (f'all {len(list((ROOT / "en").glob("*.MES.rkt.mes")))} .mes under the '
+                     f'{gates.MES_MAX} b threshold' if not bad else f'past threshold: {bad[:5]}')
 
 
 def step_split():
-    """Пары разреза: родитель зовёт ровно то, что спутник умеет.
+    """Split pairs: the parent calls exactly what the companion supports.
 
-    ⚠️ Отдельным шагом, потому что структурный гейт сюда не достаёт: разрез меняет скелет
-    скрипта НАМЕРЕННО, и сверять его с `.orig.rkt` бессмысленно. А ошибиться тут дёшево --
-    2026-09-14 разрез во второй раз в то же имя стёр семь веток живого спутника.
+    ⚠️ Separate step because the structural gate doesn't reach here: the split changes the script
+    skeleton INTENTIONALLY, and diffing against `.orig.rkt` is meaningless. Getting this wrong is easy --
+    2026-09-14 a second split into the same name wiped seven branches of a live companion.
     """
     import io
     import contextlib
@@ -136,18 +136,18 @@ def step_split():
         bad = checksplit.main(sorted(p.name[:-4] for p in (ROOT / 'en').glob('*.MES.rkt')
                                      if not p.name.endswith('.orig.rkt')))
     tail = [l for l in buf.getvalue().splitlines() if l.strip().startswith(('FLOOR', 'TOWN', 'SHP'))]
-    return not bad, ('все пары родитель/спутник сошлись'
+    return not bad, ('all parent/companion pairs match'
                      if not bad else '; '.join(tail[:3]))
 
 
 def step_numbers():
-    """Числа не слипаются с текстом, а текст вокруг них не калька с японского.
+    """Numbers don't glue to adjacent text, and the text around them isn't a calque from Japanese.
 
-    ⚠️ Отдельным шагом по прямой просьбе игрока: «это уже не первый раз мы это исправляем,
-    добавь в пайплайн, чтобы не слетало». Класс дефекта неустраним правкой одного места --
-    число печатается ОТДЕЛЬНОЙ инструкцией, и любой инструмент, который перепишет соседнюю
-    реплику (вычитка, ужимка, `terms`), может снова оставить `diary1 to.` Проверка дешёвая,
-    пусть стоит.
+    ⚠️ Added as a separate step at a direct player request: "we've already fixed this before,
+    add it to the pipeline so it doesn't regress." This class of defect cannot be eliminated by patching a single spot --
+    the number is printed by a SEPARATE instruction, and any tool that rewrites a neighboring
+    line (proofing, compression, `terms`) can leave `diary1 to.` again. The check is cheap;
+    let it stay.
     """
     sys.path.insert(0, str(ROOT / 'tools'))
     import numfix
@@ -156,17 +156,17 @@ def step_numbers():
         if p.name.endswith('.orig.rkt'):
             continue
         for (_, _, tail), _ in numfix.sites(p.read_text(encoding='utf-8')):
-            bad.append(f'{p.name[:-4]} …{tail[-24:]!r}+число')
-    return not bad, ('числа отделены от текста везде' if not bad
-                     else f'слиплись: {len(bad)}, первые {bad[:3]}')
+            bad.append(f'{p.name[:-4]} …{tail[-24:]!r}+number')
+    return not bad, ('numbers are separated from text everywhere' if not bad
+                     else f'glued together: {len(bad)}, first {bad[:3]}')
 
 
 def step_audit():
-    """ВСЯ батарея гейтов по готовому тексту, а не по батчу (`tools/audit.py`).
+    """The FULL gate battery runs against the finished text, not against a batch (`tools/audit.py`).
 
-    ⚠️ Была написана и НЕ ВКЛЮЧЕНА в конвейер — то есть запускалась, только когда я про неё
-    вспоминал. Ровно она ловит подпись говорящего, имя собственное со строчной, пропажу
-    текста и стык с именем; ни один из этих классов больше нигде не проверяется.
+    ⚠️ Was written and NOT wired into the pipeline — meaning it only ran when I remembered it.
+    It is the only place that catches the speaker tag, a proper noun starting with a lowercase letter, missing
+    text, and the seam with a name; none of these classes is checked anywhere else.
     """
     import io
     import contextlib
@@ -178,16 +178,16 @@ def step_audit():
                                 if not p.name.endswith('.orig.rkt')), 4)
     out = buf.getvalue()
     tail = [l.strip() for l in out.splitlines() if l.startswith('❌')]
-    return not bad, ('батарея гейтов по всей игре: претензий нет' if not bad
+    return not bad, ('gate battery across the whole game: no complaints' if not bad
                      else '; '.join(tail[:3]))
 
 
 def step_consistency():
-    """Одна японская реплика -> один английский перевод (`tools/consistency.py`).
+    """One Japanese line -> one English translation (`tools/consistency.py`).
 
-    ⚠️ Тоже не была в конвейере. Замер 2026-09-15: `』を見つけた！！` переводилось тремя
-    способами в 2532 местах, `効果がなかった。` — тремя в 80. Эта проверка молчала не потому,
-    что всё сходилось, а потому, что её никто не звал.
+    ⚠️ This one wasn't in the pipeline either. Measurement from 2026-09-15: `』を見つけた！！` was translated three
+    ways in 2532 places, `効果がなかった。` — three ways in 80. This check was silent not because
+    everything matched, but because nobody ever invoked it.
     """
     import io
     import contextlib
@@ -203,25 +203,25 @@ def step_consistency():
         pass
     finally:
         sys.argv = old
-    # ⚠️ Формы со вставкой `{0}` инструмент починить не умеет: `split_translation` не
-    # раскладывает по слотам текст, где маркеры стоят иначе, и это ЕГО законный отказ, а не
-    # наш недосмотр. Такой разнобой -- известное ограничение (сейчас 15 фрагментов, все
-    # косметические: «went up by 1 point» против «went up 1 point»). Провалом считаем
-    # только то, что инструмент чинить УМЕЕТ, иначе шаг краснеет вечно и его перестают
-    # читать -- а это худшее, что может случиться с проверкой.
+    # ⚠️ The tool cannot fix forms with `{0}` placeholder: `split_translation` is not
+    # maps text into slots, where markers are placed differently, and this is ITS legitimate refusal, and not
+    # our oversight. This inconsistency is a known limitation (currently 15 fragments, all
+    # cosmetic: «went up by 1 point» vs «went up 1 point»). We consider it a failure
+    # only what the tool CAN fix, otherwise the step stays red forever and people stop
+    # reading -- and that's the worst thing that can happen to the check.
     out = buf.getvalue()
     frags = [l for l in out.splitlines() if l.lstrip()[:1].isdigit() and 'x  ' in l]
     fixable = [l for l in frags if '{0}' not in l]
-    note = f'разнобой: {len(frags)} фрагментов'
+    note = f'mismatch: {len(frags)} fragments'
     if frags and not fixable:
-        note += ' — все со вставкой {0}, инструменту не по зубам (известно)'
-    return not fixable, (note if frags else 'один японский -> один английский')
+        note += ' -- all involve a {0} insertion, beyond what the tool can fix (known)'
+    return not fixable, (note if frags else 'one Japanese -> one English')
 
 
 def step_japanese():
-    """Японского текста в переводе не осталось (`tools/finish_ja.py`).
+    """No Japanese text remains in the translation (`tools/finish_ja.py`).
 
-    ⚠️ Гейт по батчу увидеть остаток не может по устройству: батч прошёл — и забыт.
+    ⚠️ The per-batch gate cannot see the remainder by design: the batch passed — and it's forgotten.
     """
     sys.path.insert(0, str(ROOT / 'tools'))
     from strings import forms, unescape
@@ -234,15 +234,15 @@ def step_japanese():
             if any('\u3040' <= c <= '\u30ff' or '\u4e00' <= c <= '\u9fff' for c in t):
                 left.append(f'{p.name[:-4]}: {t[:28]!r}')
                 break
-    return not left, ('японского текста не осталось' if not left
-                      else f'осталось японским: {len(left)}, {left[:3]}')
+    return not left, ('no Japanese text remains' if not left
+                      else f'still Japanese: {len(left)}, {left[:3]}')
 
 
 def step_menu():
-    """Пункт меню, не влезающий в своё окно, обрезается на полуслове.
+    """A menu item that doesn't fit its window gets cut off mid-word.
 
-    ⚠️ `gates.gate_menu_width` существовал и не вызывался НИОТКУДА — мёртвая проверка.
-    Меню у игры своё, 24 половинные колонки (`MENU_COLS`), и окно по содержимому не растёт.
+    ⚠️ `gates.gate_menu_width` existed and was never called from ANYWHERE — a dead check.
+    The game has its own menu, 24 half-columns (`MENU_COLS`), and the window doesn't grow with the content.
     """
     sys.path.insert(0, str(ROOT / 'tools'))
     from strings import forms
@@ -257,8 +257,8 @@ def step_menu():
                                     p.read_text(encoding='utf-8'), forms)
         if res:
             bad.append(f'{p.name[:-4]}: {res}')
-    return not bad, ('пункты меню влезают в своё окно' if not bad
-                     else f'не влезают: {len(bad)}, {bad[:2]}')
+    return not bad, ('menu items fit their window' if not bad
+                     else f'do not fit: {len(bad)}, {bad[:2]}')
 
 
 def step_patch():
@@ -267,19 +267,19 @@ def step_patch():
     for e in cfg['entries']:
         src = ROOT / 'en' / f'{e["name"]}.rkt.mes'
         if not src.is_file():
-            continue                      # файлы, которых в en/ нет (спутники разреза)
+            continue                      # files that are not in en/ (slice satellites)
         if hashlib.md5(src.read_bytes()).hexdigest() != e['md5_after']:
             miss.append(e['name'])
-    return not miss, (f'патч описывает то же, что в en/ ({len(cfg["entries"])} записей)'
-                      if not miss else f'разошлись: {miss[:6]}')
+    return not miss, (f'patch describes the same as en/ ({len(cfg["entries"])} entries)'
+                      if not miss else f'diverged: {miss[:6]}')
 
 
 def step_image():
-    """Собрать образ В СТОРОНЕ и проверить его.
+    """Build the image ASIDE and verify it.
 
-    ⚠️ НЕ в `game/WordsWorth_play.hdi`. Раньше собирали именно туда и с `--fresh` -- то есть
-    проверка молча стирала сохранение игрока. Так и случилось в ночь на 2026-09-11: человек
-    сел продолжать и обнаружил пустые слоты. Проверка обязана быть безобидной.
+    ⚠️ NOT into `game/WordsWorth_play.hdi`. We used to build right there with `--fresh` -- meaning
+    the check would silently wipe the player's save. That's exactly what happened on the night of 2026-09-11: a person
+    sat down to continue and found empty slots. The check must be harmless.
     """
     import tempfile
     with tempfile.TemporaryDirectory() as td:
@@ -288,34 +288,55 @@ def step_image():
                             str(gates.BASE), str(out), '--fresh'],
                            capture_output=True, text=True)
     ok = '✅' in r.stdout
-    return ok, (r.stdout.strip().splitlines() or ['пусто'])[-2 if ok else -1]
+    return ok, (r.stdout.strip().splitlines() or ['empty'])[-2 if ok else -1]
 
 
 def step_foreign():
-    """Патч обязан лечь на образ, где раздел лежит в ДРУГОМ месте.
+    """The patch must land on an image where the partition sits in a DIFFERENT location.
 
-    Это не теория: патч едет к людям с их собственными дампами, а смещение раздела у них
-    своё. Раньше все инструменты помнили 71680 -- адрес нашего образа, -- и на чужом mtools
-    молча не находил ничего: «применено 0, предупреждений 0» выглядело как успех.
-    Здесь раздел сдвигается искусственно, и патч обязан его НАЙТИ.
+    This is not theoretical: the patch ships to users with their own dumps, and their partition
+    offset is its own. Previously all tools remembered 71680 -- the address of our image -- and on
+    someone else's mtools it silently found nothing: "applied 0, warnings 0" looked like success.
+    Here the partition is artificially shifted, and the patch MUST find it.
     """
     import tempfile
     base = gates.BASE.read_bytes()
-    shift = 51200                        # произвольный сдвиг, кратный сектору
+    shift = 51200                        # arbitrary offset, multiple of sector size
     with tempfile.TemporaryDirectory() as td:
         img = pathlib.Path(td) / 'shifted.hdi'
         img.write_bytes(base[:4096] + b'\x00' * shift + base[4096:])
         r = subprocess.run([sys.executable, str(ROOT / 'tools/apply_patch.py'), str(img)],
                            capture_output=True, text=True)
-    line = next((l for l in r.stdout.splitlines() if 'применено' in l), r.stdout[-200:])
-    ok = 'предупреждений: 0' in line and 'применено файлов: 0' not in line
+    line = next((l for l in r.stdout.splitlines() if 'applied files' in l), r.stdout[-200:])
+    ok = 'warnings: 0' in line and 'applied files: 0' not in line
     return ok, line.strip()
 
 
+def step_isolation():
+    # The live agent must not share np2kai's system/save dir with any other emulator script:
+    # a probe on the shared dir killed the human's unsaved game on 2026-09-15 (STATUS §49).
+    r = subprocess.run([str(ROOT / 'emu/.venv/bin/python'), str(ROOT / 'emu/isolation_test.py')],
+                       capture_output=True, text=True, timeout=60)
+    return r.returncode == 0, (r.stdout.strip().splitlines() or ['no output'])[-1]
+
+
+def step_no_russian():
+    # The owner's rule (2026-09-15): we talk in Russian, but code, comments, printed messages,
+    # UI and tool data are English. It took hours of translation passes to get there once.
+    guard = ROOT / 'tools/no_russian.py'
+    if not guard.exists():
+        # the public copy ships without it (and without en/); in the working repo a missing
+        # guard is a failure, not a silent pass
+        return not (ROOT / 'en').exists(), 'skipped: not part of this copy'
+    r = subprocess.run([sys.executable, str(guard)],
+                       capture_output=True, text=True, timeout=120)
+    return r.returncode == 0, (r.stdout.strip().splitlines() or ['no output'])[-1]
+
+
 def step_probe():
-    # ⚠️ Зонд гоняет QA-ОБРАЗ, а не тот, в который играет человек: играбельный держит открытым
-    # эмулятор агента, и его копия может выйти рваной. Заодно проверяется ровно то, что мы
-    # только что собрали, а не то, что лежало в игре с прошлой сборки.
+    # ⚠️ The probe runs the QA BUILD, not the one a human is playing: the playable one keeps open
+    # the agent emulator, and its copy may come out ragged. Along the way, exactly what we
+    # just built, not what was sitting in the game since the last build.
     scr = pathlib.Path(os.environ.get('WW_SCRATCH') or '/tmp/ww-probe') / 'emuprobe'
     scr.mkdir(parents=True, exist_ok=True)
     img = scr / 'verify.hdi'
@@ -323,38 +344,40 @@ def step_probe():
     r = subprocess.run([str(ROOT / 'emu/.venv/bin/python'), str(ROOT / 'emu/battle_probe.py'),
                         img.name], capture_output=True, text=True, timeout=1800)
     img.unlink(missing_ok=True)
-    line = next((l for l in r.stdout.splitlines() if 'БОЙ' in l or 'умер' in l), '')
-    return 'ПЕРЕЖИТ' in line, line or 'зонд не сказал ничего'
+    line = next((l for l in r.stdout.splitlines() if 'BATTLE' in l or 'DIED' in l), '')
+    return 'SURVIVED' in line, line or 'probe said nothing'
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
-    ap.add_argument('--probe', action='store_true', help='плюс запуск в эмуляторе')
-    ap.add_argument('--screens', action='store_true', help='плюс чтение снятых кадров')
-    ap.add_argument('--recompile', action='store_true', help='плюс пересборка скриптов')
-    ap.add_argument('--full', action='store_true', help='и то и другое')
+    ap.add_argument('--probe', action='store_true', help='plus a run in the emulator')
+    ap.add_argument('--screens', action='store_true', help='plus reading captured frames')
+    ap.add_argument('--recompile', action='store_true', help='plus rebuilding the scripts')
+    ap.add_argument('--full', action='store_true', help='both')
     a = ap.parse_args()
     probe, recompile = a.probe or a.full, a.recompile or a.full
     screens = a.screens or a.full
     bad = 0
     if recompile:
-        print('=== пересборка скриптов (долго)')
+        print('=== rebuilding scripts (slow)')
         subprocess.run([sys.executable, str(ROOT / 'tools/recompile.py')])
-    bad += run('раскладка текста', step_layout)
-    bad += run('имена предметов и персонажей', step_terms)
-    bad += run('размер скриптов', step_size)
-    bad += run('пары разреза', step_split)
-    bad += run('числа не слиплись с текстом', step_numbers)
-    bad += run('батарея гейтов по всей игре', step_audit)
-    bad += run('один японский -> один английский', step_consistency)
-    bad += run('японского текста не осталось', step_japanese)
-    bad += run('пункты меню влезают в окно', step_menu)
-    bad += run('патч и en/ сходятся', step_patch)
-    bad += run('сборка играбельного образа', step_image)
-    bad += run('патч на чужом расположении раздела', step_foreign)
+    bad += run('text layout', step_layout)
+    bad += run('item and character names', step_terms)
+    bad += run('script size', step_size)
+    bad += run('split pairs', step_split)
+    bad += run('numbers not glued to text', step_numbers)
+    bad += run('gate battery across the whole game', step_audit)
+    bad += run('one Japanese -> one English', step_consistency)
+    bad += run('no Japanese text remains', step_japanese)
+    bad += run('menu items fit the window', step_menu)
+    bad += run('patch and en/ match', step_patch)
+    bad += run('build of the playable image', step_image)
+    bad += run('patch at a foreign partition location', step_foreign)
+    bad += run('the live agent has its own emulator directory', step_isolation)
+    bad += run('no Russian in code, messages or UI', step_no_russian)
     if screens:
-        bad += run('экраны с кадров', step_screens)
+        bad += run('screens from frames', step_screens)
     if probe:
-        bad += run('запуск в эмуляторе', step_probe)
-    print(f'\nпровалов: {bad}')
+        bad += run('run in the emulator', step_probe)
+    print(f'\nfailures: {bad}')
     sys.exit(bad)

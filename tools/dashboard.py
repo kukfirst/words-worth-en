@@ -67,7 +67,7 @@ def state():
                           'g': r.get('gate'), 'x': r.get('failed', 0)} for r in done[-14:]][::-1],
     }
 
-HTML = r"""<!doctype html><html><head><meta charset="utf-8"><title>Words Worth — прогресс</title>
+HTML = r"""<!doctype html><html><head><meta charset="utf-8"><title>Words Worth — progress</title>
 <style>
 :root{--bg:#0f1115;--panel:#171a21;--line:#242833;--fg:#e6e8ee;--dim:#8b93a7;--ok:#4ade80;--bad:#f87171;--warn:#fbbf24;--ja:#7dd3fc}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 ui-monospace,"JetBrains Mono",Menlo,monospace}
@@ -99,35 +99,35 @@ pre{white-space:pre-wrap;word-break:break-word;margin:4px 0;font-size:11px;color
 </style></head><body>
 <header><h1>Words Worth — JA→EN</h1><span id="status"></span><span class="sub" id="cur"></span><span class="sub" id="upd" style="margin-left:auto"></span></header>
 <div class="wrap">
- <div class="card now"><h2>Сейчас</h2>
+ <div class="card now"><h2>Now</h2>
    <div id="nowhead" class="sub"></div>
    <div class="bar"><i id="nowb"></i></div>
-   <div class="stats"><div><span>фаза</span><b id="ph"></b></div><div><span>токенов</span><b id="tk"></b></div>
-     <div><span>ток/с</span><b id="ts"></b></div><div><span>батч идёт</span><b id="el"></b></div>
-     <div><span>молчит</span><b id="ag"></b></div>
-     <div><span>строк готово</span><b id="ld"></b></div></div>
+   <div class="stats"><div><span>phase</span><b id="ph"></b></div><div><span>tokens</span><b id="tk"></b></div>
+     <div><span>tok/s</span><b id="ts"></b></div><div><span>batch running</span><b id="el"></b></div>
+     <div><span>silent for</span><b id="ag"></b></div>
+     <div><span>lines done</span><b id="ld"></b></div></div>
    <pre id="tail" class="tail"></pre>
    <div id="jaline" class="ja-now"></div>
  </div>
- <div class="card"><h2>Строки</h2><div class="big" id="u"></div><div class="bar"><i id="ub"></i></div>
-   <div class="stats"><div><span>файлы</span><b id="f"></b></div><div><span>скорость</span><b id="r"></b></div>
-   <div><span>осталось</span><b id="eta"></b></div><div><span>не переведено</span><b id="fail"></b></div></div></div>
- <div class="card"><h2>Файлы (последние)</h2><table id="files"></table></div>
- <div class="card"><h2>Отказы гейтов и ревью</h2><div id="probs"></div></div>
- <div class="card flow"><h2>Поток перевода</h2><div id="flow"></div></div>
+ <div class="card"><h2>Lines</h2><div class="big" id="u"></div><div class="bar"><i id="ub"></i></div>
+   <div class="stats"><div><span>files</span><b id="f"></b></div><div><span>speed</span><b id="r"></b></div>
+   <div><span>remaining</span><b id="eta"></b></div><div><span>untranslated</span><b id="fail"></b></div></div></div>
+ <div class="card"><h2>Files (recent)</h2><table id="files"></table></div>
+ <div class="card"><h2>Gate failures and review</h2><div id="probs"></div></div>
+ <div class="card flow"><h2>Translation stream</h2><div id="flow"></div></div>
 </div>
 <script>
 const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 async function tick(){
  let d; try{ d=await (await fetch('/api')).json() }catch(e){ return }
  document.getElementById('status').innerHTML=
-   `<span class="dot ${d.alive?'live':'dead'}"></span>${d.alive?'работает':'ОСТАНОВЛЕН'}`;
- document.getElementById('cur').textContent=d.current?`сейчас: ${d.current} (${d.current_at} строк)`:'';
+   `<span class="dot ${d.alive?'live':'dead'}"></span>${d.alive?'running':'STOPPED'}`;
+ document.getElementById('cur').textContent=d.current?`now: ${d.current} (${d.current_at} lines)`:'';
  document.getElementById('u').textContent=`${d.units_done.toLocaleString('ru')} / ${d.units_total.toLocaleString('ru')}`;
  document.getElementById('ub').style.width=(100*d.units_done/d.units_total).toFixed(1)+'%';
  document.getElementById('f').textContent=`${d.files_done} / ${d.files_total}`;
- document.getElementById('r').textContent=d.rate?d.rate+' строк/с':'—';
- document.getElementById('eta').textContent=d.eta_h!=null?d.eta_h+' ч':'—';
+ document.getElementById('r').textContent=d.rate?d.rate+' lines/s':'—';
+ document.getElementById('eta').textContent=d.eta_h!=null?d.eta_h+' h':'—';
  const fl=document.getElementById('fail'); fl.textContent=d.units_failed; fl.className=d.units_failed?'bad':'ok';
  document.getElementById('files').innerHTML=d.recent_files.map(r=>
    `<tr><td>${esc(r.f.replace('.MES.rkt',''))}</td><td>${r.u}</td><td>${r.s}s</td>
@@ -135,32 +135,32 @@ async function tick(){
     <td class="${r.x?'bad':''}">${r.x||''}</td></tr>`).join('')||'<tr><td class="empty">—</td></tr>';
  const p=[...d.gates_bad.map(g=>`<pre class="bad">${esc(g.file)}: ${esc(String(g.gate).slice(0,300))}</pre>`),
           ...d.rejects.map(r=>`<pre class="warn">${esc(r.file)} @${r.at}: ${esc(String(r.why).slice(0,220))}</pre>`),
-          ...d.reviews.map(r=>`<pre>${esc(r.file)} @${r.at}: ${r.issues} замечаний — ${esc(String(r.sample).slice(0,220))}</pre>`)];
- document.getElementById('probs').innerHTML=p.join('')||'<div class="empty">пока чисто</div>';
+          ...d.reviews.map(r=>`<pre>${esc(r.file)} @${r.at}: ${r.issues} notes -- ${esc(String(r.sample).slice(0,220))}</pre>`)];
+ document.getElementById('probs').innerHTML=p.join('')||'<div class="empty">clean so far</div>';
  document.getElementById('flow').innerHTML=d.pairs.slice().reverse().map(x=>
    `<div class="pair"><div class="f">${esc(x.file.replace('.MES.rkt',''))}</div>
     <div class="j">${esc(x.ja)||'&nbsp;'}</div><div class="e">${esc(x.en)||'&nbsp;'}</div></div>`).join('')
-   ||'<div class="empty">ждём первый батч с новым логом…</div>';
+   ||'<div class="empty">waiting for the first batch with a new log…</div>';
  const L=d.live||{};
- const phases={translate:'перевод',review:'ревью',gates:'гейты',summarise:'резюме сцены'};
+ const phases={translate:'translate',review:'review',gates:'gates',summarise:'scene summary'};
  document.getElementById('ph').textContent=phases[L.phase]||L.phase||'—';
  document.getElementById('tk').textContent=L.gen_tokens??'—';
  document.getElementById('ts').textContent=L.tok_s??'—';
  const el=document.getElementById('el');
- const fmt=v=>v==null?'—':(v<60?v.toFixed(0)+' с':Math.floor(v/60)+' мин '+Math.round(v%60)+' с');
+ const fmt=v=>v==null?'—':(v<60?v.toFixed(0)+' s':Math.floor(v/60)+' min '+Math.round(v%60)+' s');
  el.textContent=fmt(L.elapsed);
  const ag=document.getElementById('ag');
  ag.textContent=fmt(L.age);
  ag.className=(L.age>20?'stale':'');
  document.getElementById('ld').textContent=L.lines_done??'—';
  document.getElementById('nowhead').textContent=L.file
-   ? `${L.file.replace('.MES.rkt','')} — батч ${L.batch??'?'} / ${L.batches??'?'}`
-     + (L.attempt>1?`  (попытка ${L.attempt})`:'') : '—';
+   ? `${L.file.replace('.MES.rkt','')} -- batch ${L.batch??'?'} / ${L.batches??'?'}`
+     + (L.attempt>1?`  (attempt ${L.attempt})`:'') : '—';
  const bw=(L.batches&&L.batch)?100*L.batch/L.batches:0;
  document.getElementById('nowb').style.width=bw.toFixed(1)+'%';
- document.getElementById('tail').textContent=L.gen_tail||'(ждём ответа модели…)';
+ document.getElementById('tail').textContent=L.gen_tail||'(waiting for model response…)';
  document.getElementById('jaline').textContent=(L.batch_ja||[]).join('  ·  ');
- document.getElementById('upd').textContent='обновлено '+new Date().toLocaleTimeString('ru');
+ document.getElementById('upd').textContent='updated '+new Date().toLocaleTimeString('ru');
 }
 tick(); setInterval(tick,1500);
 </script></body></html>"""

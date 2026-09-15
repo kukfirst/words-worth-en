@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-"""Один предмет -- одно английское имя. Проверка и правка.
+"""One item -- one English name. Check and fix.
 
-Перевод шёл файл за файлом, и один и тот же японский предмет получал разные имена в разных
-файлах: `絶倫草` побывал и Stamina Herb, и Virility Grass, и Endurance Herb. Игрок видит
-одну вещь под тремя названиями -- в подсказках, в лавке и в окне предметов.
+Translation was done file by file, and the same Japanese item ended up with different names in
+different files: `絶倫草` came up as Stamina Herb, Virility Grass, and Endurance Herb. The player
+sees one thing under three names -- in tooltips, in the shop, and in the item window.
 
-КАНОН взят не с потолка, а из САМОЙ ИГРЫ: имя в окне предметов (`(str "Stam. Herb  ")`,
-поле ровно 12 знаков) и в меню лавки (`(text "Stamina Herb")`). Проза обязана совпадать с
-меню, а сокращение в окне остаётся сокращением -- поле не тянется.
+The CANON was not pulled out of thin air but taken from THE GAME ITSELF: the name in the item window (`(str "Stam. Herb  ")`,
+field is exactly 12 chars) and in the shop menu (`(text "Stamina Herb")`). Prose must match the
+menu, and the abbreviation in the window stays an abbreviation -- the field does not stretch.
 
-    python3 tools/terms.py            # показать расхождения
-    python3 tools/terms.py --fix      # переименовать по канону
+    python3 tools/terms.py            # show mismatches
+    python3 tools/terms.py --fix      # rename per canon
 
-⚠️ После правки нужен пересчёт раскладки (`tools/relayout.py`), пересборка (`recompile.py`)
-и патча (`make_patch.py`) -- длина строк изменилась.
+⚠️ After fixing, a relayout (`tools/relayout.py`), a rebuild (`recompile.py`)
+and a patch (`make_patch.py`) are required -- line lengths changed.
 
-Не путать с `tools/consistency.py`: та сверяет ОДИНАКОВЫЕ японские реплики между собой и
-термина внутри разных предложений не видит. Плюс она пропускает файлы, у которых число форм
-разошлось с оригиналом -- а это все разрезанные этажи и ВСЕ боевые SENTO*, то есть ровно те
-места, где предмет и упоминается чаще всего.
+Don't confuse with `tools/consistency.py`: that one cross-checks IDENTICAL Japanese lines against
+each other and does not see a term across different sentences. Plus it skips files whose form count
+diverged from the original -- which are all the split floors and ALL combat SENTO*, i.e. exactly
+the places where an item is mentioned most often.
 """
 import pathlib
 import re
@@ -26,7 +26,7 @@ import sys
 
 EN = pathlib.Path(__file__).resolve().parent.parent / 'en'
 
-# канон -> японское имя, имя в окне предметов (12 знаков), встреченные варианты
+# kanon -> Japanese name, name in the items window (12 characters), encountered variants
 ITEMS = {
     'Healing Herb': {
         'ja': '消炎草', 'box': 'Heal Herb',
@@ -45,46 +45,46 @@ ITEMS = {
     },
 }
 
-# Имена в скобках перед репликой -- это то, КТО говорит. Разнобой здесь заметнее всего:
-# игрок думает, что персонажей двое. Канон -- по большинству и по `glossary.json`.
+# Names in parentheses before the line -- this is WHO is speaking. Inconsistency is most noticeable here:
+# The player thinks there are two characters. Canon is by majority and by `glossary.json`.
 PEOPLE = {
     'Old Man Weiss': {'ja': 'ワイスじいさん', 'variants': ['Weiss Old Man']},
     'Old Man Barvoli': {'ja': 'バルボリじいさん', 'variants': ['Barvoli Old Man']},
 }
 
-# Имена противников -- те, что игра печатает в боевом окне: `(define-proc 41 (<> (text …)))`.
-# Правятся ТОЛЬКО внутри этой формы, не по всему тексту: описание «woman in black» в реплике
-# трогать нельзя, а имя противника -- нужно.
+# Enemy names -- the ones the game prints in the battle window: `(define-proc 41 (<> (text …)))`.
+# Edited ONLY within this form, not across the entire text: the description «woman in black» in the line
+# do not touch, but the opponent's name is required.
 #
-# ⚠️ Имена вроде Hinata, Kikuchi, Kenji, Matarou, Butt -- НЕ ошибка перевода: в японском
-# там ровно 日向, 菊地, 健二, またろう, 尻. Проверено сверкой всех 150 имён с оригиналом.
-# ⚠️ «Crazy Bear» в SENTO05 тоже верен -- там クレイジーベア катаканой, отдельный противник.
-# Неверен он только как ГОВОРЯЩИЙ в FLOOR00, где японский -- 凶暴な大熊 (см. SENTENCES).
+# ⚠️ Names like Hinata, Kikuchi, Kenji, Matarou, Butt -- NOT a translation error: in Japanese
+# there are exactly 日向, 菊地, 健二, またろう, 尻. Verified by cross-checking all 150 names against the original.
+# ⚠️ "Crazy Bear" in SENTO05 is also correct -- there's a クレイジーベア in katakana, a separate opponent.
+# He is only incorrect as the SPEAKER in FLOOR00, where the Japanese is 凶暴な大熊 (see SENTENCES).
 MONSTERS = {
-    # 光の / 影の -- всегда «Light …» / «Shadow …», а не «… of Light»
+    # 光の / 影の -- always «Light …» / «Shadow …», never «… of Light»
     'Light Knight': ['Knight of Light'],                  # 光の騎士
     'Light Saint': ['Saint of Light'],                    # 光の聖者
-    # 女 -- всегда «Light Female …», как в 光の女盗賊
+    # 女 -- always «Light Female …», as in 光の女盗賊
     'Light Female Swordsman': ['Light Swordswoman'],      # 光の女剣士
     'Light Female Guard': ['Female Light Guard'],         # 光の女衛兵
     'Light Female Saint': ['Female Light Saint'],         # 光の女聖者
-    # 装束 -- всегда «…-Clad», как в 白装束/紫装束
+    # 装束 -- always "…-Clad", as in 白装束/紫装束
     'Black-Clad Knight': ['Knight in Black'],             # 黒装束の騎士
     'Black-Clad Woman': ['Woman in Black'],               # 黒装束の女
     'Black-Clad Monk': ['Black-robed Monk'],              # 黒装束の僧侶
     'Black-Clad Sorcerer': ['Black-robed Sorcerer'],      # 黒装束の魔導師
     'Two-Headed Frog': ['Two-headed frog'],               # 双頭のカエル
     'Training Grounds Warrior 2': ['Training Ground Warrior 2'],
-    'Club': [' club'],                                    # クラブ -- без ведущего пробела
+    'Club': [' club'],                                    # クラブ -- without a leading space
     'Toad': [' toad'],                                    # トード
 }
 
-# Вещи сюжета. Главная из них -- та самая, в честь которой названа игра.
+# Story items. The main one is the very item the game is named after.
 THINGS = {
-    # ⚠️ Канон ПРИТЯЖАТЕЛЬНЫЙ, и это не вкусовщина. «Stone Tablet of Wordsworth» требует
-    # артикля, а варианты «Wordsworth's …» обходились без него: механическая замена дала бы
-    # «destroying Stone Tablet of Wordsworth» в 15 репликах. Притяжательная форма встаёт на
-    # место любого варианта без правки соседних слов -- и она же буквальный перевод の.
+    # ⚠️ The canon is ATTRACTIVE, and this is not a matter of taste. «Stone Tablet of Wordsworth» requires
+    # the article, whereas the variants «Wordsworth's …» did without it: a mechanical replacement would have
+    # «destroying Stone Tablet of Wordsworth» in 15 replies. The possessive form appears on
+    # the position of any variant without modifying neighboring words -- and it is also the literal translation of の.
     "Wordsworth's Stone Tablet": {
         'ja': '『ワーズワースの石板』',
         'variants': ["Stone Tablet of Wordsworth", "Wordsworth's Stele",
@@ -94,39 +94,39 @@ THINGS = {
     'Swordsman\'s Proof': {'ja': '『剣士の証』', 'variants': ["Swordsman's License"]},
 }
 
-# ⚠️ Не просто подстановка: у некоторых мест меняется и число, иначе выходит
-# «Stamina Herb covers the entire floor». Эти правки объявлены целиком.
+# ⚠️ Not just a substitution: in some places the number changes too, otherwise it breaks
+# «Stamina Herb covers the entire floor». These edits are declared wholesale.
 SENTENCES = [
-    # число: «Stamina Herb covers the entire floor» -- не по-английски
+    # number: "Stamina Herb covers the entire floor" -- not in English
     ("Virility Grass covers the entire floor.",
      "Stamina Herbs cover the entire floor."),
-    # ⚠️ \\n -- это ДВА знака в исходнике, а не перевод строки
+    # ⚠️ \\n -- this is TWO characters in the source, not a newline
     ("Fresh Soothe Grass and Stamina Herb\\nin stock",
      "Fresh Healing Herbs and Stamina\\nHerbs in stock"),
-    # артикль: «a Ascension Stone»
+    # article: «a Ascension Stone»
     ("used a Rising Stone", "used an Ascension Stone"),
-    # то же японское 持てるだけ уже переведено в FLOOR01 как «as many … as they could carry»
+    # the same 持てるだけ has already been translated in FLOOR01 as «as many … as they could carry»
     (" gained as much 'Virility Grass' as possible!!",
      " gathered as many [Stamina Herbs] as they could\\ncarry!!"),
-    # «the Tablet of Wordsworth» -- та же вещь, но без «Stone»
+    # «the Tablet of Wordsworth» -- the same thing, but without «Stone»
     ("the Tablet of Wordsworth", "Wordsworth's Stone Tablet"),
     ("the\\nTablet of Wordsworth", "Wordsworth's Stone\\nTablet"),
-    # говорящий в FLOOR00 -- 凶暴な大熊; противник クレイジーベア в SENTO05 остаётся собой
+    # speaker in FLOOR00 -- 凶暴な大熊; opponent クレイジーベア in SENTO05 remains itself
     ("[Crazy Bear]:", "[Ferocious Bear]:"),
-    # ⚠️ «stranger» здесь ВЕРНО по смыслу (японское 変な事 -- «странное»), но читается как
-    # существительное «незнакомец» и спотыкает. 変な -- «weird», и двусмысленности нет.
+    # ⚠️ «stranger» is CORRECT in meaning here (Japanese 変な事 -- «strange»), but reads as
+    # the noun "stranger" causes a stumble. 変な -- "weird", and there's no ambiguity.
     ("[Dalk]: I-If you do anything stranger than this...",
      "[Dalk]: I-If you do anything weirder than this..."),
 ]
 
-# `(define-proc 41 (<> (text "…")))` -- имя противника в боевом окне
+# `(define-proc 41 (<> (text "…")))` -- enemy name in the combat window
 FOE = re.compile(r'(\(define-proc 41 \(<> \(text ")([^"]*)("\)\)\))')
 
-# ⚠️ «the Wordsworth's Stone Tablet» -- артикль перед притяжательным. Он оставался от
-# вариантов вроде «the Stone Tablet of Wordsworth» и «the Wordsworth Tablet», и без этой
-# чистки замена имени плодила бы такую пару в 11 репликах. `\n` в исходнике -- ДВА знака.
-# ⚠️ Слева тоже может стоять `\n`: «reading\nthe [Wordsworth's …]». Перед `the` тогда лежит
-# буква `n`, и обычная граница слова `\b` там НЕ срабатывает -- два таких места и остались.
+# ⚠️ «the Wordsworth's Stone Tablet» -- article before possessive. It remained from
+# variants like «the Stone Tablet of Wordsworth» and «the Wordsworth Tablet», and without this
+# the name-replacement cleanup would have spawned such a pair in 11 replies. `\n` in the source -- TWO characters.
+# ⚠️ A `\n` can also appear on the left: «reading\nthe [Wordsworth's …]». In that case, before `the` there is
+# the letter `n`, and a normal word boundary `\b` does NOT work there -- two such spots remain.
 ARTICLE = re.compile(
     r"""(?:(?<=\\n)|\b)[Tt]he(?: |\\n)+(?=(?:\\"|['"\[])*Wordsworth's Stone Tablet)""")
 
@@ -136,10 +136,10 @@ def files():
 
 
 def _variants():
-    """Вариант -> канон, длинные раньше коротких.
+    """Variant -> canonical, longer before shorter.
 
-    ⚠️ Порядок значим: «Inflammation Herb» лежит ВНУТРИ «Anti-Inflammation Herb». Коротким
-    вперёд и находка двоится, и правка оставляет висеть «Anti-Healing Herb».
+    ⚠️ Order matters: "Inflammation Herb" lies INSIDE "Anti-Inflammation Herb". Shorter
+    first and the match doubles, and a correction leaves "Anti-Healing Herb" dangling. 
     """
     pairs = [(v, c) for table in (ITEMS, PEOPLE, THINGS)
              for c, d in table.items() for v in d['variants']]
@@ -147,22 +147,22 @@ def _variants():
 
 
 def _rx(variant):
-    """Вариант как регулярка, где пробел -- это пробел ИЛИ перенос строки.
+    """A regex variant where space means space OR newline.
 
-    ⚠️ Раскладка ставит `\n` прямо внутри фразы, и построчная замена такую пропускает:
-    «Stone Tablet of\nWordsworth» пережил переименование в шести местах и вылез наружу,
-    как только следующая перекладка передвинула разрыв.
+    ⚠️ The layout places `\n` right inside the phrase, and line-by-line replacement skips it:
+    «Stone Tablet of\nWordsworth» survived a rename in six places and surfaced
+    as soon as the next reflow moved the break.
     """
     return re.compile(r'(?: |\\n)'.join(re.escape(w) for w in variant.split(' ')))
 
 
 def _foes():
-    """Имя противника -> канон."""
+    """Enemy name -> canonical."""
     return {v: c for c, vs in MONSTERS.items() for v in vs}
 
 
 def scan():
-    """[(файл, строка, вариант, канон)] -- всё, что зовётся не по канону."""
+    """[(file, line, variant, canonical)] -- all entries referenced by non-canonical names."""
     out, foes = [], _foes()
     for p in files():
         for n, line in enumerate(p.read_text(encoding='utf-8').splitlines(), 1):
@@ -181,7 +181,7 @@ def scan():
 
 
 def fix():
-    """Переименовать по канону. Множественное число выживает: 'Herbs' = 'Herb' + 's'."""
+    """Rename per canon. Plural survives: 'Herbs' = 'Herb' + 's'."""
     changed = {}
     for p in files():
         s = was = p.read_text(encoding='utf-8')
@@ -199,7 +199,7 @@ def fix():
 
 
 def box_names_still_fit():
-    """Имя в окне предметов не длиннее поля -- иначе список разъедется."""
+    """Item name in the items window is no longer than the field -- otherwise the list will fall apart."""
     bad = [(c, d['box']) for c, d in ITEMS.items() if len(d['box']) > 12]
     return bad
 
@@ -209,13 +209,13 @@ if __name__ == '__main__':
     if '--fix' in sys.argv:
         ch = fix()
         for n, k in sorted(ch.items()):
-            print(f'  {n}: строк изменено {k}')
-        print(f'файлов переименовано: {len(ch)}')
+            print(f'  {n}: lines changed {k}')
+        print(f'files renamed: {len(ch)}')
         rest = scan()
-        print('осталось расхождений:', len(rest))
+        print('mismatches remaining:', len(rest))
         sys.exit(1 if rest else 0)
     rows = scan()
-    print(f'расхождений: {len(rows)}')
+    print(f'mismatches: {len(rows)}')
     for f, n, v, canon in rows:
         print(f'  {f}:{n}  {v!r} -> {canon!r}')
     sys.exit(1 if rows else 0)

@@ -61,7 +61,7 @@ RECIPE = [
 
 
 IN_GAME_SCENES = ("START.MES", "START.MES:ja")      # play resumed from LOAD 1
-TITLE_MENU_SCENES = ("START1.MES",)   # титульное меню; суффикс :ja снимается перед сверкой
+TITLE_MENU_SCENES = ("START1.MES",)   # title menu; suffix :ja is stripped before verification
 
 
 def in_game(stack):
@@ -71,13 +71,13 @@ def in_game(stack):
     check had it backwards and certified "new game" for the exact state it was meant to
     reject -- the menu -- so the agent happily "played" a menu for a whole run.
 
-    ⚠️⚠️ И следующая версия ошиблась ЗЕРКАЛЬНО: она сверяла `scene`, то есть ВНУТРЕННИЙ
-    элемент стека, со списком, где лежит `START.MES` -- а он всегда ВНЕШНИЙ. Внутренний в
-    игре -- это комната (`FLOOR05.MES`), поэтому проверка не могла пройти НИКОГДА. Живой
-    агент шёл полтораста ходов с диагнозом «застрял в титульном меню», находясь в игре.
-    Проверка, которая всегда ложна, бесполезна ровно так же, как та, что всегда истинна, --
-    и вдобавок клевещет на исправный прогон.
-    → Играем, когда резидентен `START.MES` И поверх него лежит комната, а меню не резидентно.
+    ⚠️⚠️ The next version got it MIRRORED: it compared `scene`, i.e. the INNER
+    stack element, against a list that holds `START.MES` -- which is always OUTER. The inner one in
+    a game is a room (`FLOOR05.MES`), so the check could never pass. A live
+    agent walked 150 turns diagnosed as "stuck on the title menu" while actually in the game.
+    A check that is always false is just as useless as one that is always true, --
+    and on top of that, it falsely accuses a correct run.
+    → We're playing when `START.MES` is resident AND a room sits on top of it, while the menu is not resident.
     """
     base = [n.split(":", 1)[0] for n in stack]
     if any(n in TITLE_MENU_SCENES for n in base):
@@ -111,7 +111,7 @@ def drive(press, run, frame, log=print, until=None):
         if must and not moved:
             ok = False
             log(f"  ⚠️ step '{label}' did not move the screen -- recipe is stale for this image")
-        if label == until:              # остановиться на этом шаге (титульное меню для человека)
+        if label == until:              # stop at this step (title menu for a human)
             break
     fin = frame()
     bright = float(fin.mean()) if fin is not None else 0.0

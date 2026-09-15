@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Добить формы, оставшиеся японскими, тем же конвейером -- по остатку ПО ВСЕЙ ИГРЕ.
+"""Finish off the forms still left in Japanese, through the same pipeline -- for the remainder ACROSS THE ENTIRE GAME.
 
-Зачем отдельный инструмент. `gates.gate_charset` судит БАТЧ: если модель вернула японский,
-батч отклоняется и после трёх попыток форма остаётся как была. Это правильно (лучше японская
-строка, чем выдумка), но никто никогда не спрашивал игру целиком: «а что осталось?». Замер
-2026-09-13 -- осталось три формы, все три в H-сценах, и это единственный японский текст,
-который увидит игрок.
+Why a separate tool. `gates.gate_charset` judges a BATCH: if the model returned Japanese,
+the batch is rejected and after three attempts the form stays as it was. This is correct (a Japanese
+string is better than a fabrication), but nobody ever asked the whole game: "what's left?". Measurement
+2026-09-13 -- three forms remain, all three in H-scenes, and this is the only Japanese text
+the player will ever see.
 
-⚠️ Кана в `NAME.MES` НЕ переводится: это ряды экранной клавиатуры ввода имени, а не текст.
-⚠️ Полноширинные пробелы (\\u3000) -- раскладка, а не текст.
+⚠️ Kana in `NAME.MES` are NOT translated: these are on-screen keyboard rows for name input, not text.
+⚠️ Full-width spaces (\\u3000) -- layout, not text.
 
-    tools/finish_ja.py            # показать остаток
-    tools/finish_ja.py --apply    # перевести и записать
+    tools/finish_ja.py            # show the remainder
+    tools/finish_ja.py --apply    # translate and write
 """
 import argparse
 import pathlib
@@ -20,16 +20,16 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from strings import escape, forms, patch, split_translation, unescape       # noqa: E402
 
-# ⚠️ `translate.py` разбирает аргументы НА УРОВНЕ МОДУЛЯ, а не под `if __name__`. Импорт
-# отсюда уводит ЕГО argparse в наши ключи, и `--apply` падает как «unrecognized argument»
-# от чужого разбора. Прячем свои аргументы на время импорта.
+# ⚠️ `translate.py` parses arguments AT MODULE LEVEL, not under `if __name__`. Import
+# From here argparse diverts IT into our flags, and `--apply` fails as "unrecognized argument"
+# From external parsing. We hide our arguments during import.
 _argv, sys.argv = sys.argv, sys.argv[:1]
 import translate                                                           # noqa: E402
 sys.argv = _argv
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 EN = ROOT / 'en'
-SKIP_FILES = {'NAME.MES'}            # экранная клавиатура -- кана по делу
+SKIP_FILES = {'NAME.MES'}            # on-screen keyboard -- on point
 
 
 def real_japanese(t):
@@ -50,7 +50,7 @@ def remaining():
 
 def main(apply):
     rows = remaining()
-    print(f'форм с японским текстом: {len(rows)}')
+    print(f'forms with Japanese text: {len(rows)}')
     for p, f in rows:
         print(f'  {p.name[:-8]:12} {unescape(f["ja"])[:60]}')
     if not rows or not apply:
@@ -65,14 +65,14 @@ def main(apply):
         en, why, stats = translate.translate_batch(ja, glossary, locked,
                                                    story='', tail=[], width=46)
         if en is None:
-            print(f'  ❌ {p.name[:-8]}: гейты отклонили перевод -- {str(why)[:160]}')
+            print(f'  ❌ {p.name[:-8]}: gates rejected the translation -- {str(why)[:160]}')
             continue
         edits = []
         for f, e in zip(fs, en):
             pieces = split_translation(e, len(f['slots']), len(f['ins']),
                                        f.get('lead', 0), f.get('trail', 0))
             if pieces is None:
-                print(f'  ❌ {p.name[:-8]}: перевод не раскладывается по слотам формы')
+                print(f'  ❌ {p.name[:-8]}: translation does not fit the slots of the form')
                 continue
             for (x, y), piece in zip(f['slots'], pieces):
                 edits.append((x, y, escape(piece)))

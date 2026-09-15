@@ -10,8 +10,8 @@ it degraded output and sent the model into multi-thousand-token loops.
 """
 import fcntl, json, os, pathlib, time, urllib.request
 
-# Адрес и модель задаются окружением: конвейер не привязан ни к этой машине, ни к этой
-# модели -- нужен лишь OpenAI-совместимый эндпоинт. Значения по умолчанию -- наши.
+# Address and model are set by the environment: the pipeline is not tied to this machine nor to this
+# models -- only an OpenAI-compatible endpoint is needed. Defaults are ours.
 URL = os.environ.get('WW_LLM_URL', "http://10.99.99.1:18082/v1/chat/completions")
 MODEL = os.environ.get('WW_LLM_MODEL', "qwen3.8-27b")
 LOCK = pathlib.Path(__file__).resolve().parent.parent / '.endpoint.lock'
@@ -84,7 +84,7 @@ def _chat(system, user, max_tokens, timeout, on_delta, deadline=None):
                 if delta.get('reasoning_content'):
                     think += 1
                     if think % 16 == 0:
-                        on_delta(''.join(out) + f'\n[думает… {think} токенов]', ntok)
+                        on_delta(''.join(out) + f'\n[thinking… {think} tokens]', ntok)
                     continue
                 piece = delta.get('content')
                 if piece:

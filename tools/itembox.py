@@ -1,65 +1,65 @@
 #!/usr/bin/env python3
-"""Починить поле названия предмета — в поле и во всех боевых сценах.
+"""Fix the item name field — in the field and in all battle scenes.
 
     python3 tools/itembox.py [--check]
 
-Один и тот же список предметов лежит в 28 файлах: `START.MES`, `START1.MES` и 26 боевых
-`SENTO*`. В каждом он рисуется через `(set-arr~ @ 17 2 232)` и страдает двумя болезнями.
+The same item list lives in 28 files: `START.MES`, `START1.MES`, and 26 battle
+`SENTO*` files. In each one it is drawn via `(set-arr~ @ 17 2 232)` and suffers from two diseases.
 
-**Болезнь 1 — словарь.** `(text …)` компилируется через словарь `.MES` (128 частых
-символов, однобайтовые индексы), а это поле словарь НЕ разжимает: байты индексов
-складываются в пары и уходят в знакогенератор кандзи. На экране — половинки иероглифов.
-`(str …)` пишет литералом и минует словарь. Японский оригинал уцелел случайно: его
-словарь — четыре символа, ни один в названия не попадал. Подробности: STATUS.md §13.
+**Disease 1 — dictionary.** `(text …)` compiles through the `.MES` dictionary (128 common
+characters, single-byte indices), but this field does NOT decompress the dictionary: index bytes
+get paired up and fed into the kanji glyph generator. On screen — half kanji.
+`(str …)` writes a literal and bypasses the dictionary. The Japanese original survived by accident:
+its dictionary has four characters, none of which appeared in item names. Details: STATUS.md §13.
 
-**Болезнь 2 — разнобой.** Файлы переводились независимо, и предмет 902 назван семью
-способами (`Gold Bar`, `Gold Chunk`, `Gold Ingot`, `Gold Lump`, `Gold Nugget`,
-`Lump of Gold`, `Gold Ingots`). Здесь имя выбирается по регистру, а не по тому, что
-написал переводчик.
+**Disease 2 — inconsistency.** Files were translated independently, and item 902 is named seven
+different ways (`Gold Bar`, `Gold Chunk`, `Gold Ingot`, `Gold Lump`, `Gold Nugget`,
+`Lump of Gold`, `Gold Ingots`). Here the name is chosen by case, not by what
+the translator wrote.
 
-⚠️ Ширина поля — 14 узких знакомест (`x=16..128`, дальше рамка панели). Замер по
-НЕТРОНУТОМУ японскому образу: там `消炎草　08` рисуется прямо на панели, а собственная
-зачистка оригинала (7 иероглифических пробелов) и задаёт эти 14. Счётчик из двух цифр
-прижат к знакоместам 13–14, поэтому имя со счётчиком добивается до 12.
+⚠️ Field width is 14 narrow character cells (`x=16..128`, beyond that is the panel frame). Measured on
+the UNTOUCHED Japanese image: there `消炎草　08` is drawn right on the panel, and the original's own
+padding (7 full-width spaces) is what sets those 14. The two-digit counter is pinned to cells 13–14,
+so the name plus counter caps at 12.
 
-⚠️ Полные названия остаются в лавке и репликах — там ширины хватает и видеть предмет
-целиком удобнее. Сокращения живут только здесь. Это решение, а не недоделка.
+⚠️ Full names remain in the shop and in dialogue — there is plenty of width there and seeing the item
+in full is more convenient. Abbreviations live only here. This is a decision, not an oversight.
 
-⚠️ Ряд пробелов одним литералом уже убивал игру (замер: 50 валит, 12 живёт, потолок 16),
-поэтому зачистка — два литерала по 7, а не один из 14.
+⚠️ A run of spaces in a single literal already killed the game (measured: 50 crashes, 12 survives, ceiling 16),
+so the padding is two literals of 7, not one of 14.
 
-Проход идемпотентен: `recompile.py` переписывает `en/*.rkt` на месте, и повторный запуск
-не должен ничего менять.
+The pass is idempotent: `recompile.py` rewrites `en/*.rkt` in place, and a second run
+must not change anything.
 """
 import pathlib, re, sys
 
 EN = pathlib.Path(__file__).resolve().parent.parent / 'en'
-FIELD = 14                      # знакомест в поле
-COUNT = 2                       # разрядов счётчика
+FIELD = 14                      # character limit in field
+COUNT = 2                       # counter digits
 
 NUM_ON  = '(set-arr~ @ 20 (// (&& (~ @ 20) 4095) 4096))'
 NUM_OFF = '(set-arr~ @ 20 (&& (~ @ 20) 4095))'
 BLANK_JA = '(text "　　　　　　　")'
-BLANK_EN = '(str "       ") (str "       ")'          # 14 знакомест двумя литералами
+BLANK_EN = '(str "       ") (str "       ")'          # 14 character positions with two literals
 
-# Ярлык поля по регистру предмета. Сокращения выведены из канонических полных названий,
-# которые остаются в лавке и репликах: Healing Herb / Stamina Herb / Gold Ingot /
+# Field label by item register. Abbreviations are derived from canonical full names,
+# that remain in the shop and replicas: Healing Herb / Stamina Herb / Gold Ingot /
 # Ascension Stone.
-# Канонические названия расходуемых предметов. Файлы переводились независимо, и один и
-# тот же предмет получил до ПЯТИ разных имён: 902 звался Gold Lump / Gold Ingot /
-# Gold Nugget / Lump of Gold / Gold Chunk. Здесь имя одно — и выбран САМЫЙ КОРОТКИЙ из
-# ходивших вариантов: правка тогда только укорачивает файлы, а рост — единственное, чем
-# можно случайно упереться в порог буфера скрипта (40 000 б) или в ширину окна.
+# Canonical names of consumable items. Files were translated independently, and one and
+# the same item received up to FIVE different names: 902 was called Gold Lump / Gold Ingot /
+# Gold Nugget / Lump of Gold / Gold Chunk. Here the name is singular — and the SHORTEST of them was chosen
+# considered variants: then the edit only shortens files, and growth — the only thing by which
+# you can accidentally hit the script buffer limit (40 000 B) or the window width.
 CANON = {900: 'Healing Herb', 901: 'Stamina Herb', 902: 'Gold Bar', 903: 'Ascension Stone'}
 
-# вариант -> канон. Множественное идёт первым: иначе «Gold Nuggets» после замены
-# единственного превратится в «Gold Bars» через «Gold Bar»+«s» лишь по счастливой
-# случайности, а «Lumps of Gold» не совпадёт вовсе.
+# variant -> canonical. Plural goes first: otherwise "Gold Nuggets" breaks after replacement
+# the singular will become «Gold Bars» via «Gold Bar»+«s» only by lucky
+# coincidences, and «Lumps of Gold» won't match at all.
 VARIANTS = [
-    # ⚠️ Написания, которые приносит canon.py: он решает по ОБРЫВКУ, а не по предмету, и
-    # для 消炎草/絶倫草 выбирал независимо в разных местах -- отсюда Soothe/Vigor/Vigor Grass
-    # рядом с уже известными Soothing/Virile. Длинные фразы идут первыми: замена идёт по
-    # списку подряд, и «Vigor Grass» иначе съело бы хвост «Endless Vigor Grass».
+    # ⚠️ Notations that canon.py introduces: it resolves by TRUNCATION, not by subject, and
+    # For 消炎草/絶倫草 I chose the translations independently in different places -- hence Soothe/Vigor/Vigor Grass
+    # next to the already known Soothing/Virile. Long phrases come first: substitution is done by
+    # to the list in order, otherwise «Vigor Grass» would have eaten the tail of «Endless Vigor Grass».
     ('Endless Vigor Grass', 'Stamina Herb'), ('Vigor Grass', 'Stamina Herb'),
     ('Soothe Herbs', 'Healing Herbs'), ('Soothe Herb', 'Healing Herb'),
     ('Vigor Herbs', 'Stamina Herbs'), ('Vigor Herb', 'Stamina Herb'),
@@ -74,18 +74,18 @@ VARIANTS = [
     ('Gold Chunks', 'Gold Bars'), ('Gold Chunk', 'Gold Bar'),
 ]
 
-# Ярлык поля: сокращение канонического названия, потому что здесь всего 14 знакомест.
+# Field label: abbreviated form of the canonical name, because there are only 14 character positions here.
 LABEL = {900: 'Heal Herb', 901: 'Stam. Herb', 902: 'Gold Bar', 903: 'Asc. Stone'}
 
 _COUNTED = re.compile(r'\(text "([^"]*)" \(number \(: (\d+)\)\)\)')
-# уже сконвертированный ярлык -- чтобы прогон был идемпотентным И подхватывал смену имени
+# already-converted label -- so the run is idempotent AND picks up a rename
 _RELABEL = re.compile(r'\(str "([^"]*)"\) \(text \(number \(: (\d+)\)\)\)')
 _PLAIN = re.compile(r'\(text "([^"]+)"\)')
 _PAD = re.compile(r'^\s*\(str " +"\)\s*$')
 
 
 def region(src):
-    """Границы cond со списком предметов: от ветки 0 до конца объемлющего cond."""
+    """Boundaries of a cond with a subject list: from branch 0 to the end of the enclosing cond."""
     m = re.search(r'\(\(== \(~ @ 23\) 0\)', src)
     if not m:
         return None
@@ -133,14 +133,14 @@ def fix(src):
     seg = _RELABEL.sub(relabel, seg)
     seg = seg.replace(BLANK_JA, BLANK_EN)
     seg = _PLAIN.sub(plain, seg)
-    # отбивки центрирования: оригиналу они выравнивали узкие кандзи, английскому только
-    # съедают ширину
+    # centering offsets: for the original they aligned narrow kanji, for English only
+    # eat up the width
     seg = '\n'.join(l for l in seg.split('\n') if not _PAD.match(l))
     return src[:a] + seg + src[b:], n
 
 
 def names_pass(check):
-    """Свести варианты названий к CANON по ВСЕМ файлам, а не только в поле предметов."""
+    """Normalize name variants to CANON across ALL files, not just the items field."""
     hits = 0
     for p in sorted(EN.glob('*.MES.rkt')):
         if p.name.endswith('.orig.rkt'):
@@ -151,10 +151,10 @@ def names_pass(check):
         if new != src:
             n = sum(src.count(a) for a, _ in VARIANTS)
             hits += n
-            print(f'  {"нужна правка" if check else "сведено"}: {p.name} ({n})')
+            print(f'  {"Fix needed" if check else "summarized"}: {p.name} ({n})')
             if not check:
                 p.write_text(new, encoding='utf-8')
-    print(f'вариантов названий {"к правке" if check else "сведено"}: {hits}')
+    print(f'name variants {"for editing" if check else "reduced"}: {hits}')
     return hits
 
 
@@ -174,16 +174,16 @@ def main():
                 touched += 1
                 if not check:
                     p.write_text(new, encoding='utf-8')
-                print(f'  {"нужна правка" if check else "поправлен"}: {p.name} ({n} форм)')
-        # ширины
+                print(f'  {"fix needed" if check else "fixed"}: {p.name} ({n} forms)')
+        # widths
         r = region(new)
         if r:
             for name in re.findall(r'\(str "([^"]*)"\)', new[r[0]:r[1]]):
                 if len(name) > FIELD:
                     bad += 1
-                    print(f'  ⚠️ {p.name}: {name!r} шире поля ({len(name)} > {FIELD})')
-    print(f'форм в блоках: {total}; файлов {"требует правки" if check else "поправлено"}: '
-          f'{touched}; шире поля: {bad}')
+                    print(f'  ⚠️ {p.name}: {name!r} wider than the field ({len(name)} > {FIELD})')
+    print(f'forms in blocks: {total}; files {"needs fixing" if check else "fixed"}: '
+          f'{touched}; wider than field: {bad}')
     return 1 if (check and touched) or bad else 0
 
 

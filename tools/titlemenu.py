@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
-"""Перерисовать надписи титульного меню: они в КАРТИНКЕ, а не в тексте.
+"""Redraw the title-menu labels: they're in the IMAGE, not in text.
 
-    tools/titlemenu.py            # собрать en/ELFANN.GP4 и превью en/ELFANN.preview.png
+    tools/titlemenu.py            # build en/ELFANN.GP4 and the en/ELFANN.preview.png preview
 
-`最初から始める / ロード1 / ロード2` на титульном экране не печатает ни один скрипт:
-`START1.MES` только подсвечивает строку (`box-inv`) и ловит мышь, а сами надписи
-нарисованы в `ELFANN.GP4` -- листе спрайтов, где каждая надпись отдельной плашкой.
-Поэтому правка текста до них не дотягивается, и игрок видел японское меню в
-полностью английской игре.
+`最初から始める / ロード1 / ロード2` on the title screen isn't printed by any script:
+`START1.MES` only highlights the line (`box-inv`) and catches the mouse, while the labels
+themselves are drawn in `ELFANN.GP4` -- a sprite sheet where each label is its own tile.
+So text edits don't reach them, and the player saw a Japanese menu in an otherwise fully
+English game.
 
-Как перерисовываем:
-- надпись находим по цвету букв (индекс 7, белый) и стираем вместе с тенью
-  (индекс 12, коричневый) до фона плашки (индекс 3) -- только внутри рамки надписи,
-  рамку и дерево вокруг не трогаем;
-- английскую пишем ШРИФТОМ ИГРЫ: ANK 8x16 из шрифтового ПЗУ PC-98, тем же, которым
-  игра рисует английский текст в диалогах, -- с той же тенью на пиксель вправо-вниз;
-- кодек GP4 -- `tools/juice/gp4`. Круг «GP4 -> BMP -> GP4» на этом файле сходится
-  байт в байт (замер 2026-09-11), так что всё, что не надпись, остаётся нетронутым.
+How we redraw:
+- find the label by letter color (index 7, white) and erase it together with its shadow
+  (index 12, brown) down to the tile background (index 3) -- only inside the label's frame,
+  leaving the frame and the tree around it untouched;
+- write the English in the GAME'S OWN FONT: ANK 8x16 from the PC-98 font ROM, the same one
+  the game uses to draw English text in dialogue -- with the same one-pixel down-right shadow;
+- GP4 codec -- `tools/juice/gp4`. The round trip "GP4 -> BMP -> GP4" on this file matches
+  byte for byte (measured 2026-09-11), so anything that isn't a label stays untouched.
 
-⚠️ Порядок надписей в листе снят глазами с кадра: левая колонка сверху вниз и
-собранная панель справа. Если число найденных надписей не совпадёт с LABELS --
-инструмент откажется, а не впишет не то не туда.
+⚠️ The order of labels on the sheet was read off the frame by eye: the left column top to
+bottom, then the assembled panel on the right. If the number of labels found doesn't match
+LABELS -- the tool refuses rather than write the wrong thing in the wrong place.
 """
 import os, pathlib, shutil, subprocess, sys, tempfile
 from collections import deque
@@ -33,10 +33,10 @@ import hdimage                                                       # noqa: E40
 import gates                                                         # noqa: E402
 
 GP4 = ROOT / 'tools/juice/gp4/gp4.rkt'
-FONT = ROOT / 'emu/system/np2kai/font.bmp'   # np2kai: ANK 8x16, символ c в x = c*8, y 0..15
-TEXT, SHADOW, PLATE = 7, 12, 3        # индексы снял счётом по пикселям плашки, не глазом
+FONT = ROOT / 'emu/system/np2kai/font.bmp'   # np2kai: ANK 8x16, character c at x = c*8, y 0..15
+TEXT, SHADOW, PLATE = 7, 12, 3        # indices taken by counting the badge's pixels, not by eye
 
-# сверху вниз: левая колонка (11 плашек), затем собранная панель справа (3)
+# top to bottom: left column (11 tiles), then assembled panel on the right (3)
 LABELS = ['New Game', 'Load 1', 'Load 2', 'Load 3', 'Load 4', 'Load 5', 'Extras',
           'New Game', 'Load 1', 'Load 2', 'Main Menu',
           'New Game', 'Load 1', 'Load 2']
@@ -44,11 +44,11 @@ LABELS = ['New Game', 'Load 1', 'Load 2', 'Load 3', 'Load 4', 'Load 5', 'Extras'
 
 def glyphs():
     f = np.array(Image.open(FONT).convert('1'))
-    return lambda ch: ~f[0:16, ord(ch) * 8: ord(ch) * 8 + 8]     # в ПЗУ буквы тёмные
+    return lambda ch: ~f[0:16, ord(ch) * 8: ord(ch) * 8 + 8]     # in ROM, characters are dark
 
 
 def blobs(a):
-    """Надписи: связные группы кремовых пикселей, склеенные с запасом по горизонтали."""
+    """Labels: connected groups of cream pixels, merged with a horizontal margin."""
     m = a == TEXT
     grow = np.zeros_like(m)
     for dx in range(-6, 7):
@@ -66,7 +66,7 @@ def blobs(a):
         ys = [p[0] for p in pts if m[p]]; xs = [p[1] for p in pts if m[p]]
         if ys and 10 <= max(ys) - min(ys) <= 18 and max(xs) - min(xs) >= 20:
             out.append((min(ys), max(ys), min(xs), max(xs)))
-    # левая колонка раньше панели, внутри -- сверху вниз
+    # left column before panel, inside -- top to bottom
     return sorted(out, key=lambda b: (b[2] > 200, b[0]))
 
 
@@ -84,8 +84,8 @@ def relabel(a):
     g = glyphs()
     found = blobs(a)
     if len(found) != len(LABELS):
-        sys.exit(f'надписей найдено {len(found)}, ожидалось {len(LABELS)} -- лист не тот, '
-                 f'что снят глазами; перерисовывать вслепую не буду')
+        sys.exit(f'labels found {len(found)}, expected {len(LABELS)} -- not the sheet that '
+                 f'was read off by eye; refusing to redraw blindly')
     for (y0, y1, x0, x1), label in zip(found, LABELS):
         box = a[y0:y1 + 2, x0:x1 + 2]
         box[(box == TEXT) | (box == SHADOW)] = PLATE
@@ -112,7 +112,7 @@ def racket(args, cwd):
 
 
 def original_gp4(dest):
-    """ELFANN.GP4 из НЕТРОНУТОГО образа -- никогда из уже переведённого."""
+    """ELFANN.GP4 from a PRISTINE image -- never from an already translated one."""
     d = pathlib.Path(tempfile.mkdtemp(prefix='wwtitle.'))
     cfg = d / 'mtoolsrc'
     hdimage.mtoolsrc(gates.BASE, cfg)
@@ -141,4 +141,4 @@ def build(out=ROOT / 'en/ELFANN.GP4'):
 
 if __name__ == '__main__':
     p = build()
-    print(f'{p} ({p.stat().st_size} б), превью {p.with_suffix(".preview.png").name}')
+    print(f'{p} ({p.stat().st_size} b), preview {p.with_suffix(".preview.png").name}')

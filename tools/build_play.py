@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
-"""Собрать играбельный образ: исходный HDI + патч перевода -> новый файл.
+"""Build a playable image: original HDI + translation patch -> new file.
 
-    tools/build_play.py [исходный.hdi] [итоговый.hdi] [--fresh]
+    tools/build_play.py [source.hdi] [output.hdi] [--fresh]
 
-По умолчанию `game/WordsWorth.hdi` -> `game/WordsWorth_play.hdi` -- тот самый образ,
-на котором играет человек (`emu/agent.py` в режиме «я», `WW_DISK`).
+By default `game/WordsWorth.hdi` -> `game/WordsWorth_play.hdi` -- the very image
+a human plays on (`emu/agent.py` in "self" mode, `WW_DISK`).
 
-Исходник НЕ трогаем: работаем на копии и переименовываем её в итоговый файл только после
-проверки. Оборвётся посередине -- предыдущий играбельный образ останется целым.
+The source is NEVER touched: we work on a copy and rename it to the output file only after
+verification. If it aborts mid-way -- the previous playable image stays intact.
 
-## Сохранение переживает пересборку
+## Save data survives a rebuild
 
-Патч переписывает `FLAG0..FLAG4` -- пять слотов сохранения. Не по прихоти: там лежат имена
-героев, которые движок подставляет в реплики (`tools/savenames.py`). Но взять слот из патча
-готовым значит убить прогресс игрока при каждой новой сборке, а ради этого всё и делается:
-нашёл дефект -- я чиню -- ты продолжаешь с того же места.
+The patch rewrites `FLAG0..FLAG4` -- five save slots. Not by accident: they hold hero names
+that the engine substitutes into dialogue (`tools/savenames.py`). But taking a slot from the patch
+as-is means killing player progress on every rebuild, and that's the whole point:
+found a defect -- I fix it -- you continue from the same place.
 
-Поэтому слоты идут особым путём: они ВЫНИМАЮТСЯ из прежнего играбельного образа и
-кладутся в новый как есть, а латиницей переписываются только два поля имён внутри них.
-`--fresh` -- начать с чистых слотов (прогресс будет потерян).
+So slots take a special path: they are EXTRACTED from the previous playable image and
+placed into the new one as-is, with only the two Latin name fields inside them rewritten.
+`--fresh` -- start with clean slots (progress will be lost).
 
-⚠️ Чистый слот берётся из ОРИГИНАЛА (`FLAG1..FLAG4` там побайтно одинаковы -- это
-нетронутый шаблон), а НЕ из патча. В патче слот 0 несёт чужой сейв: он приехал вместе с
-самим образом из коллекции (68 б отличий от пустого) -- кто-то поиграл до нас. Ставить его
-игроку в «ロード1» незачем.
+⚠️ A clean slot is taken from the ORIGINAL (`FLAG1..FLAG4` there are byte-identical -- this
+is an untouched template), NOT from the patch. In the patch, slot 0 carries someone else's save: it
+came with the image itself from the collection (68 b difference from empty) -- someone played before us. No point
+handing that to the player as "ロード1".
 
-⚠️ Пересобирать образ, открытый работающим эмулятором, нельзя -- скрипт откажется.
+⚠️ Cannot rebuild an image that is open in a running emulator -- the script will refuse.
 """
 import functools, hashlib, json, pathlib, shutil, subprocess, sys, tempfile, os
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -33,7 +33,7 @@ import hdimage
 import gates
 from savenames import latinise, is_latin, NAME_SLOTS
 
-# печать без буфера: иначе строки родителя выезжают после вывода apply_patch
+# unbuffered print: otherwise the parent's lines leak after apply_patch output
 print = functools.partial(print, flush=True)
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -53,7 +53,7 @@ def mtenv(img):
 
 
 def read_slots(img):
-    """Достать пять слотов сохранения из образа: имя -> байты."""
+    """Extract five save slots from the image: name -> bytes."""
     env, d = mtenv(img)
     got = {}
     try:
@@ -68,15 +68,15 @@ def read_slots(img):
 
 
 def empty_slot(img):
-    """Нетронутый шаблон слота из образа.
+    """Untouched slot template from the image.
 
-    В оригинале FLAG1..FLAG4 побайтно одинаковы -- это и есть «сохранения нет».
-    Если вдруг разошлись, образ не тот, за какой себя выдаёт, и молчать об этом нельзя.
+    In the original, FLAG1..FLAG4 are byte-identical -- that is what "no saves" means.
+    If they ever diverge, the image is not what it claims to be, and staying silent about it is not an option.
     """
     got = read_slots(img)
     blanks = {got[n] for n in SLOTS[1:] if n in got}
     if len(blanks) != 1:
-        sys.exit(f'в {img.name} слоты FLAG1..FLAG4 не одинаковы -- где пустой, не понять')
+        sys.exit(f'in {img.name} slots FLAG1..FLAG4 are not identical -- cannot tell which is empty')
     return blanks.pop()
 
 
@@ -93,7 +93,7 @@ def write_slots(img, slots):
 
 
 def extract_ww(img, dest):
-    """Каталог WW из образа -- для приёмки того, что получилось."""
+    """WW directory from the image -- for acceptance of what was produced."""
     dest.mkdir(parents=True, exist_ok=True)
     env, d = mtenv(img)
     try:
@@ -105,7 +105,7 @@ def extract_ww(img, dest):
 
 
 def holders(path):
-    """Кто держит файл открытым -- (pid, имя процесса)."""
+    """Who holds the file open -- (pid, process name)."""
     out = []
     for pd in pathlib.Path('/proc').iterdir():
         if not pd.name.isdigit():
@@ -128,37 +128,37 @@ def main():
     cfgf = DIST / 'patch.json'
 
     if not src.is_file():
-        sys.exit(f'нет исходного образа {src}')
+        sys.exit(f'no source image {src}')
     if not cfgf.is_file():
-        sys.exit(f'нет {cfgf} -- сначала tools/make_patch.py')
+        sys.exit(f'no {cfgf} -- run tools/make_patch.py first')
     if src == out:
-        sys.exit('исходник и итог -- один файл; оригинал должен остаться нетронутым')
+        sys.exit('source and output are the same file; the original must stay untouched')
     busy = holders(out)
     if busy:
-        sys.exit('образ открыт: ' + ', '.join(f'{c} (pid {p})' for p, c in busy) +
-                 ' -- закрой эмулятор, переписывать .hdi под ним нельзя')
+        sys.exit('image is open: ' + ', '.join(f'{c} (pid {p})' for p, c in busy) +
+                 ' -- close the emulator, .hdi cannot be rewritten under it')
     cfg = json.loads(cfgf.read_text())
 
-    print(f'исходник {src.name} ({src.stat().st_size} б)')
+    print(f'source {src.name} ({src.stat().st_size} b)')
     have = md5(src)
     if have == cfg['base_md5']:
-        print('  образ тот самый, на котором собран патч')
+        print('  same image the patch was built against')
     else:
-        print(f'  ⚠️ md5 не как у эталона ({have[:8]} против {cfg["base_md5"][:8]}) --'
-              ' идём по файлам, они и рассудят')
+        print(f'  ⚠️ md5 does not match the reference ({have[:8]} vs {cfg["base_md5"][:8]}) --'
+              ' going by files instead, they will settle it')
 
-    # --- слоты сохранения: решаем ОДИН раз, чей прогресс поедет в образ --------------
-    # Либо твой из прежнего образа, либо пустой шаблон. Третьего (чужой сейв из патча) нет.
+    # --- save slots: we decide ONCE whose progress goes into the image --------------
+    # Either yours from the previous image or an empty template. There is no third option (someone else's save from a patch).
     if out.is_file() and not fresh:
         slots = read_slots(out)
         empty = empty_slot(src)
         played = [n for n, b in slots.items() if latinise(b)[0] != latinise(empty)[0]]
-        print(f'сохранение из {out.name}: слотов {len(slots)}, с прогрессом '
-              f'{", ".join(played) if played else "нет"}')
+        print(f'save from {out.name}: slots {len(slots)}, with progress '
+              f'{", ".join(played) if played else "none"}')
     else:
         slots = {n: empty_slot(src) for n in SLOTS}
-        print('слоты чистые' + (' (--fresh, прогресс не переносится)' if fresh else
-                                ', это первая сборка'))
+        print('clean slots' + (' (--fresh, progress not carried over)' if fresh else
+                                ', this is the first build'))
 
     tmp = out.with_suffix(out.suffix + '.tmp')
     shutil.copyfile(src, tmp)
@@ -166,7 +166,7 @@ def main():
         subprocess.run([sys.executable, str(ROOT / 'tools/apply_patch.py'),
                         str(tmp), str(DIST)])
 
-        # Слоты кладём ПОВЕРХ патча и правим в них ТОЛЬКО имена -- прогресс не наш.
+        # Slots go ON TOP OF the patch and we edit ONLY the names in them -- progress is not ours.
         renamed = []
         fixed = {}
         for name, blob in slots.items():
@@ -174,32 +174,32 @@ def main():
             if changed:
                 renamed.append(name)
         write_slots(tmp, fixed)
-        print(f'слоты записаны; имена латиницей поправлены в: '
-              f'{", ".join(renamed) or "уже были"} ({", ".join(NAME_SLOTS.values())})')
+        print(f'slots written; names fixed to Latin in: '
+              f'{", ".join(renamed) or "already were"} ({", ".join(NAME_SLOTS.values())})')
 
-        # --- приёмка: сверяем КАЖДЫЙ файл ----------------------------------------------
+        # --- acceptance: verify EVERY file ----------------------------------------------
         d = pathlib.Path(tempfile.mkdtemp(prefix='wwplay.'))
         got = extract_ww(tmp, d / 'ww')
         bad = []
         for e in cfg['entries']:
             f = got / e['name']
             if not f.is_file():
-                bad.append((e['name'], 'нет в образе'))
+                bad.append((e['name'], 'not in image'))
             elif e['name'] in SLOTS:
-                pass                      # слоты проверяются ниже, у них своя мера
+                pass                      # slots are checked below, they have their own metric
             elif md5(f) != e['md5_after']:
-                bad.append((e['name'], 'содержимое не то'))
-        # слот -- это прогресс, он и ОБЯЗАН отличаться от эталонного патча. Мера другая:
-        # доехал байт в байт тем, что положили, и имена в нём латинские.
+                bad.append((e['name'], 'wrong content'))
+        # slot -- this is progress, it is OBLIGATED to differ from the reference patch. The measure is different:
+        # arrived byte-for-byte as deposited, and the names in it are Latin.
         for name, blob in fixed.items():
             cur = (got / name).read_bytes()
             if cur != blob:
-                bad.append((name, 'слот доехал не тем'))
+                bad.append((name, 'slot arrived wrong'))
             elif not is_latin(cur):
-                bad.append((name, 'имена остались катаканой'))
+                bad.append((name, 'names still in katakana'))
         shutil.rmtree(d, ignore_errors=True)
         if bad:
-            print(f'\n❌ проверка не прошла: {len(bad)} из {len(cfg["entries"])}')
+            print(f'\n❌ check failed: {len(bad)} of {len(cfg["entries"])}')
             for n, why in bad[:15]:
                 print(f'   {n}: {why}')
             tmp.unlink(missing_ok=True)
@@ -209,14 +209,14 @@ def main():
         tmp.unlink(missing_ok=True)
         raise
 
-    print(f'\n✅ все {len(cfg["entries"])} файлов на месте и совпали'
-          + ', слоты на месте')
-    print(f'играть: {out}')
+    print(f'\n✅ all {len(cfg["entries"])} files present and matching'
+          + ', slots in place')
+    print(f'play: {out}')
     return 0
 
 
-# ⚠️ Сборка -- ТОЛЬКО при запуске файлом. Раньше `sys.exit(main())` стоял на уровне модуля,
-# и обычный `import build_play` (хоть ради одной `holders()`) молча пересобирал образ, в
-# который человек сейчас играет. Поймано на себе.
+# ⚠️ Build -- ONLY when run as a file. Previously `sys.exit(main())` was at module level,
+# and a plain `import build_play` (even for a single `holders()`) silently rebuilt the image, in
+# which person is currently playing. Caught in the act.
 if __name__ == '__main__':
     sys.exit(main())

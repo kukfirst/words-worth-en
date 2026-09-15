@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-"""Проверить, что разрез ничего не потерял: родитель зовёт ровно то, что спутник умеет.
+"""Verify that the split lost nothing: the parent calls exactly what the companion provides.
 
-Разрез -- единственная правка, которая меняет СТРУКТУРУ скрипта намеренно, поэтому
-структурный гейт (`gates`, сверка скелета с `.orig.rkt`) на него неприменим. Остаётся
-одно: пересчитать пару целиком.
+A split is the only edit that deliberately changes the STRUCTURE of a script, so
+the structural gate (`gates`, skeleton check against `.orig.rkt`) does not apply to it. What remains is
+one thing: recompute the pair in full.
 
-Что ловится:
+What it catches:
 
-| проверка | что ловит |
+| check | what it catches |
 |---|---|
-| условия | ветку, вынесенную из родителя, но не доехавшую в спутника |
-| вызов на месте | родителя, который на месте ветки зовёт не того спутника |
-| нет сирот | спутника с веткой, которую родитель уже не зовёт, -- мёртвый текст |
-| размеры | файл за `gates.MES_MAX` |
-| имена | спутника, которого зовут, но которого нет в `en/` |
+| conditions | a branch lifted out of the parent but not carried over to the companion |
+| call in place | a parent that, where a branch used to be, calls the wrong companion |
+| no orphans | a companion with a branch the parent no longer calls -- dead code |
+| size | file over `gates.MES_MAX` |
+| names | a companion that is called but does not exist in `en/` |
 
-⚠️ Именно эта сверка поймала бы перезапись FLOOR05C 2026-09-14: у спутника осталась бы
-одна ветка вместо семи, а родитель звал бы его в семи местах -- «нет сирот» наоборот.
+⚠️ This is the very check that would have caught the FLOOR05C overwrite on 2026-09-14: the companion would have
+kept one branch instead of seven, while the parent called it in seven places -- "no orphans" in reverse.
 
-    tools/checksplit.py            # все пары
+    tools/checksplit.py            # all pairs
     tools/checksplit.py FLOOR08.MES
 """
 import pathlib
@@ -34,13 +34,13 @@ EN = ROOT / 'en'
 
 
 def norm(s):
-    """Условие без оглядки на пробелы: сверяем смысл, а не форматирование."""
+    """Condition regardless of whitespace: we compare meaning, not formatting."""
     return re.sub(r'\s+', ' ', s).strip()
 
 
 def conds(src):
-    """Условие каждой ветки диспетчера -> её тело. Без диспетчера -- пусто, не ошибка:
-    большинство скриптов игры (бои, магазины, меню) никакого (cond ..) не содержат."""
+    """Condition of each dispatcher branch -> its body. Without a dispatcher -- empty, not an error:
+    most game scripts (battles, shops, menus) contain no (cond ..) at all."""
     out = {}
     if '(cond' not in src:
         return out
@@ -52,12 +52,12 @@ def conds(src):
 
 
 def check(name):
-    """Список претензий к паре родитель/спутники. Пусто -- значит сошлось."""
+    """List of issues with the parent/satellites pair. Empty means everything is consistent."""
     src = (EN / f'{name}.rkt').read_text(encoding='utf-8')
     bad = []
     parent = conds(src)
 
-    # кого родитель зовёт и по какому условию
+    # who the parent calls and under what condition
     wanted = {}
     for cond, bodies in parent.items():
         for body in bodies:
@@ -67,24 +67,24 @@ def check(name):
     for callee, need in sorted(wanted.items()):
         comp = EN / f'{callee}.rkt'
         if not comp.exists():
-            bad.append(f'зовёт {callee}, а файла нет в en/')
+            bad.append(f'calls {callee}, but the file is not in en/')
             continue
-        # родные спутники игры (у них есть японский оригинал) не наша забота:
-        # их условия писал elf, и совпадать с родительскими они не обязаны
+        # native game companions (they have a Japanese original) not our concern:
+        # their conditions were written by elf, and they don't need to match the parent's
         if (EN / f'{callee}.orig.rkt').exists():
             continue
         have = set(conds(comp.read_text(encoding='utf-8')))
         for c in sorted(need - have):
-            bad.append(f'{callee}: родитель зовёт по «{c[:56]}», а такой ветки в спутнике НЕТ')
+            bad.append(f'{callee}: parent calls under «{c[:56]}», but no such branch exists in the satellite')
         for c in sorted(have - need):
-            bad.append(f'{callee}: ветка «{c[:56]}» есть, но родитель её уже не зовёт (мёртвый текст)')
+            bad.append(f'{callee}: branch «{c[:56]}» exists, but the parent no longer calls it (dead text)')
 
     for f in [name] + sorted(wanted):
         mes = EN / f'{f}.rkt.mes'
         if not mes.exists():
-            bad.append(f'{f}: не скомпилирован')
+            bad.append(f'{f}: not compiled')
         elif mes.stat().st_size > gates.MES_MAX:
-            bad.append(f'{f}: {mes.stat().st_size} б -- за порогом {gates.MES_MAX}')
+            bad.append(f'{f}: {mes.stat().st_size} b -- over threshold {gates.MES_MAX}')
     return bad, wanted
 
 
@@ -96,11 +96,11 @@ def main(names):
         if not ours and not bad:
             continue
         mark = '❌' if bad else '✅'
-        print(f'{mark} {name:16} спутников наших {len(ours)}: {", ".join(sorted(ours)) or "—"}')
+        print(f'{mark} {name:16} our satellites {len(ours)}: {", ".join(sorted(ours)) or "—"}')
         for b in bad:
             print(f'      {b}')
         total += len(bad)
-    print(f'\n{"❌ претензий: " + str(total) if total else "✅ все пары сошлись"}')
+    print(f'\n{"❌ issues:" + str(total) if total else "✅ all pairs matched"}')
     return 1 if total else 0
 
 

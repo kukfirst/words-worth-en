@@ -1,50 +1,50 @@
 #!/usr/bin/env python3
-"""Имена героев внутри слота сохранения.
+"""Hero names inside the save slot.
 
-Имена персонажей лежат НЕ в скриптах, а в сохранении: `アストラル` (Astral) и
-`ポルックス` (Pollux) не встречаются ни в одном .mes -- ни в японском, ни в
-переведённом, -- зато лежат в `FLAG0..FLAG4`, пяти слотах по 3072 б (те самые
-ロード1..ロード5 титульного меню). Движок подставляет имя в реплику во время
-выполнения, поэтому в английском тексте появляется катакана, и правкой перевода
-это не лечится в принципе.
+Character names live NOT in the scripts but in the save: `アストラル` (Astral) and
+`ポルックス` (Pollux) don't occur in a single .mes -- neither Japanese nor translated --
+they live in `FLAG0..FLAG4` instead, five slots of 3072 b each (the very ロード1..ロード5
+of the title menu). The engine substitutes the name into a line at runtime, so katakana
+shows up in the English text, and no amount of editing the translation fixes that.
 
-Отсюда следствие, ради которого модуль и выделен: слот сохранения нельзя просто
-взять из патча готовым -- иначе прогресс игрока умрёт при каждой пересборке.
-Правильная операция -- переписать ДВА ПОЛЯ в СВОЁМ слоте, а сам слот не трогать.
-`latinise()` это и делает, и она идемпотентна: уже латинское поле пропускается.
+Hence the reason this module exists: a save slot can't simply be taken ready-made from the
+patch -- that would kill the player's progress on every rebuild. The correct operation is to
+rewrite the TWO FIELDS inside the player's OWN slot and leave the rest of the slot untouched.
+`latinise()` does exactly that, and it's idempotent: a field already in Latin is skipped.
 """
-NAME_SLOTS = {0x576: "Astral", 0x58a: "Pollux"}   # смещение в FLAG* -> имя латиницей
-NAME_FIELD = 20                                   # шаг между полями
+NAME_SLOTS = {0x576: "Astral", 0x58a: "Pollux"}   # offset in FLAG* -> name in Latin
+NAME_FIELD = 20                                   # stride between fields
 
 
 def encode(text):
-    """Латиница кодами английского шрифта игры.
+    """Latin text as codes from the game's English font.
 
-    Правило снято ЗАМЕРОМ, а не выведено из таблицы набора: файл, где все 234 строки
-    заменены на «Astral», собран без словаря, и самая частая последовательность в нём
-    встретилась ровно 234 раза. В скрипте она лежит как (ведущий-0x20, второй); в
-    сохранении -- без вычитания.
-    Столбец = ASCII-0x20; ведущий 0x85; второй 0x3F+столбец, а с 64-го 0x40+столбец.
+    The rule was pulled from MEASUREMENT, not derived from a character table: a file where
+    all 234 lines were replaced with "Astral" was built without a dictionary, and the most
+    common byte sequence in it occurred exactly 234 times. In the script it's stored as
+    (leader-0x20, second); in the save, without the subtraction.
+    Column = ASCII-0x20; leader 0x85; second is 0x3F+column, and from column 64 on, 0x40+column.
     """
     out = bytearray()
     for ch in text:
         col = ord(ch) - 0x20
         if not 1 <= col <= 94:
-            raise ValueError(f"вне английского набора: {ch!r}")
+            raise ValueError(f"outside the English character set: {ch!r}")
         out += bytes((0x85, (0x3F if col <= 63 else 0x40) + col))
     return bytes(out)
 
 
-# ⚠️ Проверка, которую можно провалить: замеренные байты «Astral» должны совпасть.
+# ⚠️ A check that can actually fail: the measured "Astral" bytes must match.
 assert encode("Astral") == bytes.fromhex("8560859385948592858185 8c".replace(" ", "")), \
-    "кодировка латиницы разошлась с замером -- НЕ трогать сохранения"
+    "Latin encoding diverged from measurement -- do NOT touch saves"
 
 
 def decode(blob):
-    """Поле имени -> латиница. Обратна `encode`; ноль и мусор обрывают имя.
+    """Name field -> Latin text. Inverse of `encode`; a zero or garbage byte ends the name.
 
-    Нужна не для сохранений, а для ЧТЕНИЯ: имя героя игрок вводит сам в `NAME.MES`, и
-    подстановка `{0}` в реплике -- это оно. Без него экранный текст не свести к исходнику
+    Needed not for saves but for READING: the hero's name is typed in by the player on
+    `NAME.MES`, and the `{0}` substitution in a line is exactly that name. Without this,
+    screen text can't be traced back to the source
     (`emu/textsrc.py`).
     """
     out = []
@@ -59,17 +59,17 @@ def decode(blob):
     return "".join(out)
 
 
-assert decode(encode("Astral")) == "Astral", "разбор имени разошёлся со сборкой"
+assert decode(encode("Astral")) == "Astral", "Name parsing diverged from build"
 
 
 def latinise(blob):
-    """(новые байты слота, изменилось ли). Прогресс игрока не трогаем."""
+    """(new slot bytes, whether anything changed). We don't touch player progress."""
     b = bytearray(blob)
     changed = False
     for off, latin in NAME_SLOTS.items():
         enc = encode(latin)
         if len(enc) > NAME_FIELD:
-            raise ValueError(f"{latin} не влезает в поле {NAME_FIELD} б")
+            raise ValueError(f"{latin} does not fit the {NAME_FIELD} b field")
         if bytes(b[off:off + len(enc)]) == enc:
             continue
         b[off:off + NAME_FIELD] = enc + b"\x00" * (NAME_FIELD - len(enc))
@@ -78,5 +78,5 @@ def latinise(blob):
 
 
 def is_latin(blob):
-    """Имена в слоте уже латинские?"""
+    """Are the names in the slot already Latin?"""
     return not latinise(blob)[1]
