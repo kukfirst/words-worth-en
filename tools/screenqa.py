@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-"""Проверка по КАДРАМ: что реально написано в окне сообщения, а не что мы думаем.
+"""Frame-based check: what is actually rendered in the message window, not what we think.
 
-Зачем отдельно от `tools/relayout.py --check`. Та проверка судит по исходнику и по модели
-раскладки. Модель бывает неполна -- ровно так проехал дефект «Front. The door has a sign:
-'Prison, no entry for unauth / orized»: форма сама по себе укладывалась в окно, а печаталась
-после чужого «Front. » (`tools/column.py`). Проверка по исходнику этого не видела, потому
-что не знала про колонку; кадр видел сразу.
+Why separate from `tools/relayout.py --check`. That check judges by the source and the layout
+model. The model can be incomplete -- that is exactly how the defect «Front. The door has a sign:
+'Prison, no entry for unauth / orized» slipped through: the form itself fit in the window, but it was
+printed after someone else's «Front. » (`tools/column.py`). The source-based check did not see this because
+it did not know about the column; the frame saw it immediately.
 
-Здесь читается то, что на экране: `emu/textbox.py` снимает знакоместа растром, и ловятся
+Here we read what is on screen: `emu/textbox.py` captures character cells as a raster, and catches
 
-  * разорванные слова -- строка занимает всё окно и следующая начинается с буквы;
-  * дыры -- два и более пробела посреди строки;
-  * нечитаемые знакоместа -- растр, которого нет в эталонах.
+  * broken words -- a line fills the entire window and the next one starts with a letter;
+  * gaps -- two or more spaces in the middle of a line;
+  * unreadable character cells -- a raster that does not exist in the reference set.
 
-Кадры берутся из `emu/replay/` (их пишет агент на каждое нажатие человека), `emu/rec/` и
-`emu/shots/`. ⚠️ Это НЕ полное покрытие: проверяется только то, до чего дошли ногами. Гейт
-по исходнику остаётся главным, а этот -- вторая, независимая сеть.
+Frames are taken from `emu/replay/` (the agent writes one on every human keypress), `emu/rec/` and
+`emu/shots/`. ⚠️ This is NOT full coverage: only what we actually walked through is checked. The source
+gate remains the primary one; this is the second, independent safety net.
 
-    tools/screenqa.py              # все кадры
-    tools/screenqa.py --since 2h   # только свежие
+    tools/screenqa.py              # all frames
+    tools/screenqa.py --since 2h   # fresh ones only
 """
 import argparse
 import pathlib
@@ -43,21 +43,21 @@ def frames(since=None):
 
 
 def defects(lines, width):
-    """Брак раскладки и, ОТДЕЛЬНО, нечитаемые знакоместа.
+    """Layout defects and, SEPARATELY, unreadable character positions.
 
-    ⚠️ Нечитаемое в самом КОНЦЕ текста -- не брак, а кадр, снятый посреди печати: последний
-    знак дорисован наполовину. Такие кадры агент пишет на каждое нажатие, и без этой
-    оговорки весь отчёт состоит из них.
-    ⚠️ Нечитаемое в СЕРЕДИНЕ -- почти всегда цифра 6..9, которых нет в эталонах шрифта
-    (`emu/textbox.py`). Это пробел в ЧТЕНИИ, а не в тексте, поэтому гейт на нём не валится.
+    ⚠️ An unreadable position at the very END of the text -- not a defect, but a frame captured mid-print: the last
+    glyph is half-drawn. The agent writes such a frame on every keypress, and without this
+    caveat the entire report consists of them.
+    ⚠️ An unreadable position in the MIDDLE -- almost always a digit 6..9, which are missing from the font
+    references (`emu/textbox.py`). This is a gap in READING, not in the text, so the gate does not fail on it.
     """
     bad = []
     for i, ln in enumerate(lines):
         nxt = lines[i + 1] if i + 1 < len(lines) else None
         if len(ln) >= width and nxt and ln[-1:].strip() and nxt[:1].strip():
-            bad.append('слово разорвано')
+            bad.append('word broken')
         if HOLE.search(ln):
-            bad.append('дыра в строке')
+            bad.append('gap in the line')
     text = '\n'.join(lines).rstrip()
     return sorted(set(bad)), textbox.UNKNOWN in text[:-1]
 
@@ -81,11 +81,11 @@ def scan(since=None):
         if key in seen:
             continue
         seen.add(key)
-        # ⚠️ Кадр без окна сообщения -- это ИЛЛЮСТРАЦИЯ на весь экран, и её пиксели в
-        # области окна читаются как мусор: «дыра в строке», «слово разорвано». Замер
-        # 2026-09-15: оба «брака раскладки» из 289 экранов оказались такими картинками.
-        # Признак: почти всё нечитаемо. Настоящая реплика состоит из знаков, которые
-        # читатель знает; картинка -- из тех, которых нет ни в одном эталоне.
+        # ⚠️ A frame without a message window -- it's a FULL-SCREEN ILLUSTRATION, and its pixels in
+        # window regions read as garbage: «hole in a line», «word is broken». Measurement
+        # 2026-09-15: both "layout defects" out of the 289 screens turned out to be these images.
+        # Sign: almost everything is unreadable. The actual utterance consists of signs, which
+        # the reader knows; the image is one of those not present in any reference.
         txt = ''.join(lines)
         ink = [c for c in txt if c != ' ']
         if ink and sum(c == textbox.UNKNOWN for c in ink) / len(ink) > 0.5:
@@ -94,7 +94,7 @@ def scan(since=None):
         if not bad and not unread:
             continue
         if unread:
-            bad = bad + ['нечитаемое знакоместо']
+            bad = bad + ['unreadable char position']
         try:
             src = textsrc.locate(lines, idx=idx)
         except Exception:
@@ -104,13 +104,13 @@ def scan(since=None):
 
 
 def broken(rows):
-    """Только настоящий брак текста -- по нему и валится гейт."""
-    return [r for r in rows if any(b != 'нечитаемое знакоместо' for b in r[2])]
+    """Only genuine text defects -- that's what causes the gate to fail."""
+    return [r for r in rows if any(b != 'unreadable char position' for b in r[2])]
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
-    ap.add_argument('--since', help='только кадры за последние N (h/m), например 2h')
+    ap.add_argument('--since', help='only frames from the last N (h/m), e.g. 2h')
     a = ap.parse_args()
     since = None
     if a.since:
@@ -118,10 +118,10 @@ if __name__ == '__main__':
         since = time.time() - float(a.since[:-1]) * mul
     rows, total = scan(since)
     hard = broken(rows)
-    print(f'разных экранов прочитано: {total}, с браком раскладки: {len(hard)}, '
-          f'с нечитаемыми знакоместами: {len(rows) - len(hard)}')
+    print(f'distinct screens read: {total}, with layout defects: {len(hard)}, '
+          f'with unreadable cells: {len(rows) - len(hard)}')
     for p, lines, bad, src in rows:
-        where = f"{src['file']}:{src['line']}" if src else 'в исходнике не найдено'
+        where = f"{src['file']}:{src['line']}" if src else 'not found in source'
         print(f"\n--- {p.name}  [{', '.join(bad)}]  -> {where}")
         for l in lines:
             print(f'    |{l}|')

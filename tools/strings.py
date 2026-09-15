@@ -149,16 +149,16 @@ def rebuild_dict(src):
 
 
 def unescape(s):
-    """Снять экранирование исходника: на экране \\" -- это одна кавычка, а не две.
+    """Unescape the source: on screen \\" is a single quote, not two.
 
-    ⚠️ forms() отдаёт СЫРОЙ текст литерала, вместе с обратными слэшами, а patch()
-    экранирует заново. Скормить ему уже экранированный текст -- значит получить \\\\"
-    вместо \\" и показать игроку лишние слэши: ровно это я и сделал в первой версии,
-    испортив 9 реплик в 8 файлах. Плюс счёт колонок врал: \\" считалось за два знака.
+    ⚠️ forms() returns the RAW literal text, backslashes included, while patch()
+    re-escapes. Feeding it already-escaped text means ending up with \\\\"
+    instead of \\" and showing the player extra backslashes: that's exactly what I did in v1,
+    corrupting 9 lines in 8 files. The column count was also wrong: \\" was counted as two characters.
 
-    ⚠️ `\\n` -- ПЕРЕВОД СТРОКИ, а не буква `n`. juice пишет разрывы именно так, и
-    tools/relayout.py ставит их сам; наивное «снять слэш» превращало бы разрыв в букву
-    посреди слова при каждом перечитывании.
+    ⚠️ `\\n` is a LINE BREAK, not the letter `n`. juice writes breaks this way, and
+    tools/relayout.py inserts them itself; naively stripping the slash would turn a break into a letter
+    mid-word on every re-read.
     """
     out, i = [], 0
     while i < len(s):
@@ -170,7 +170,7 @@ def unescape(s):
 
 
 def escape(s):
-    """Обратное к unescape: текст -> тело строкового литерала."""
+    """Inverse of unescape: text -> body of a string literal."""
     return (s.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n'))
 
 
@@ -200,33 +200,33 @@ if __name__ == '__main__':
         print(f'{len(units)} units ({multi} with a name insertion) '
               f'from {len(set(u["file"] for u in units))} files -> {sys.argv[3]}')
 
-# --- цифры в окне сообщения -----------------------------------------------------------
-# Движок печатает (number …) двухбайтовыми кодами, и в половинном шрифте английской сборки
-# они выходят половинками глифов («dealt :( damage!!»). Замер (tools/number_probe.py, один
-# бой, урон 10) развёл три гипотезы: счётчик цифр @20[8:11] даёт «(:(» — он задаёт только
-# ширину поля; полноширинный шрифт даёт «１０» — читаемо, но широко; а бит 12 @20 даёт
-# ровно «10». Панель статуса ставит его же — потому там цифры всегда были целы.
-# Вставка канонична дословно: gates.skeleton() вырезает эти две строки С ОБЕИХ сторон,
-# иначе structure-гейт справедливо ругался бы на инструкцию, которой нет в оригинале.
+# --- digits in the message window -----------------------------------------------------------
+# The engine prints (number …) as two-byte codes, and in half-width font on the English build
+# they come out as half-glyphs («dealt :( damage!!»). Benchmark (tools/number_probe.py, one
+# combat, damage 10) branched into three hypotheses: digit counter @20[8:11] gives «(:(» — it only sets
+# field width; full-width font gives "１０" — readable but wide; and bit 12 @20 gives
+# exactly «10». The status panel sets the same value — because the numbers there were always integers.
+# The insertion is canonical verbatim: gates.skeleton() trims these two lines FROM BOTH sides,
+# otherwise structure-gate would rightfully flag an instruction that doesn't exist in the original.
 NUM_ON = '(set-arr~ @ 20 (// (&& (~ @ 20) 4095) 4096))'
 NUM_OFF = '(set-arr~ @ 20 (&& (~ @ 20) 4095))'
-# ⚠️ Шаблон требует СЛАГАЕМОГО: (+ (&& (~ @ 20) 61695) N) -- именно так игра выставляет
-# счётчик цифр панели. Один раз я расширил его до любой маски 61695 и снял 337 обёрток,
-# решив, что они валят игру: после снятия вылет сдвинулся дальше. Это была корреляция,
-# а не причина -- игру валила заливка пробелами до края строки (§12 STATUS). Расширение
-# выкосило рабочую правку, и цифры в бою снова стали половинками: «dealt :( damage».
+# ⚠️ Template requires an ADDEND: (+ (&& (~ @ 20) 61695) N) -- this is exactly how the game sets it
+# panel digit counter. Once I extended it to any mask 61695 and removed 337 wrappers,
+# deciding that they're breaking the game: after removal the crash shifted further. It was a correlation,
+# and not the cause -- padding with spaces to the end of the line was breaking the game (§12 STATUS). Extension
+# wiped out the working fix, and combat numbers went back to halves again: "dealt :( damage".
 _COUNT = re.compile(r'\(set-arr~ @ 20 \(\+ \(&& \(~ @ 20\) 61695\) \d+\)\)')
 
 
 def number_fix(src):
-    """Обернуть каждую форму (text …) с (number …) в «половинные цифры включены».
+    """Wrap every (text …) form containing (number …) in "half-width digits enabled".
 
-    ⚠️ Только числа В ПРЕДЛОЖЕНИИ. Панель статуса, список предметов и прайс лавки рисуют
-    числа сами: ставят курсор (@17) и счётчик цифр (@20 биты 8-11) — туда лезть нельзя.
-    Замер: правка ОДНОГО START.MES, девять вставок из тринадцати в отрисовке панели, и
-    игра мертва на загрузке SENTO00 (emu/battle_probe.py, 35-й шаг, воспроизводится).
-    Признак такого места — запись счётчика поблизости перед формой; плюс голое
-    (text (number …)) без единой буквы — это всегда панель, никогда не фраза.
+    ⚠️ Only numbers IN THE SENTENCE. The status panel, item list, and shop price list render
+    digits themselves: they set the cursor (@17) and the digit counter (@20 bits 8-11) — do not touch.
+    Measured: patching a SINGLE START.MES, nine of thirteen insertions in the panel render, and
+    the game is dead on SENTO00 load (emu/battle_probe.py, step 35, reproducible).
+    Telltale sign of such a spot — a counter write nearby before the form; plus a bare
+    (text (number …)) with not a single letter — that is always a panel, never a phrase.
     """
     spots, last = [], 0
     for m in re.finditer(r'\(text\b', src):
@@ -238,12 +238,12 @@ def number_fix(src):
             continue
         last = end + 1
         if not any(e[0] == 'str' and any(c.isalpha() for c in e[3]) for e in els):
-            continue                       # голые цифры — панель, не фраза
+            continue                       # bare numbers — a panel, not a phrase
         if _COUNT.search(src[max(0, op - 400):op]):
-            continue                       # рядом выставлен счётчик цифр — тоже панель
-        # ⚠️ идемпотентность: recompile.py правит en/*.rkt НА МЕСТЕ, и без этой проверки
-        # второй прогон складывает обёртки одна на другую (проверено: (set-arr~ @ 20 …)
-        # дважды подряд, скелет расходится на лишний разделитель).
+            continue                       # a digit counter is placed next to it — also a panel
+        # ⚠️ idempotency: recompile.py modifies en/*.rkt IN PLACE, and without this check
+        # second pass stacks wrappers one on top of another (verified: (set-arr~ @ 20 …)
+        # twice in a row, the skeleton diverges by an extra separator).
         if src[max(0, op - len(NUM_ON) - 4):op].rstrip().endswith(NUM_ON):
             continue
         spots.append((op, end + 1))

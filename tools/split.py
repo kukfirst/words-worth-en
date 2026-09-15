@@ -1,45 +1,49 @@
 #!/usr/bin/env python3
-"""Разрезать комнату за порогом на два скрипта: родитель + спутник.
+"""Split a room over threshold into two scripts: a parent + a companion.
 
-Порог -- `gates.MES_MAX`, и он на ФАЙЛ, а не на комнату. Игра сама этим пользуется:
-FLOOR08 зовёт floor08a.mes пятнадцать раз, а вместе они весят 72 819 б.
-Приём (списан с готовой пары FLOOR08/FLOOR08A):
+The threshold is `gates.MES_MAX`, and it's per FILE, not per room. The game itself relies
+on this: FLOOR08 calls floor08a.mes fifteen times, and together they weigh 72,819 b.
+The trick (copied from the shipped FLOOR08/FLOOR08A pair):
 
-  родитель:  ((&& (== V 6) ...) (<> (mes-call "floor08b.mes")))
-  спутник:   ((&& (== V 6) ...) (<> ...настоящее тело...))
+  parent:     ((&& (== V 6) ...) (<> (mes-call "floor08b.mes")))
+  companion:  ((&& (== V 6) ...) (<> ...the real body...))
 
-Спутник ПЕРЕПРОВЕРЯЕТ то же условие -- значит V и флаги (: NNN) глобальны и переход
-переживают. Проверено на живой паре: FLOOR08A тестирует ровно то условие, по которому
-FLOOR08 его вызвал.
+The companion RE-CHECKS the same condition -- meaning V and the (: NNN) flags are global
+and survive the transfer. Verified on the live pair: FLOOR08A tests exactly the condition
+FLOOR08 called it under.
 
-⚠️⚠️ СПУТНИК ПЕРЕЗАПИСЫВАЕТСЯ ЦЕЛИКОМ, а не дополняется. `build()` собирает его с нуля из
-выбранных сейчас веток, и `--apply` кладёт результат поверх `--into`. Значит ВТОРОЙ разрез
-того же файла в ТОТ ЖЕ спутник сотрёт ветки, вынесенные первым разрезом, — а родитель
-продолжит их звать, и эти события умрут. Ловушка поймана 2026-09-14 до записи: у `FLOOR02B`
-было 7 веток и 7 072 б, предлагаемый спутник — 1 458 б. Второй разрез делать ТОЛЬКО в новое
-имя (`FLOOR02C.MES` и далее).
+⚠️⚠️ THE COMPANION IS OVERWRITTEN WHOLESALE, not appended to. `build()` assembles it from
+scratch out of the currently-selected branches, and `--apply` drops the result over
+`--into`. So a SECOND split of the same file into the SAME companion will wipe out the
+branches the first split extracted -- while the parent keeps calling them, and those events
+die. The trap was caught 2026-09-14 before it got written: `FLOOR02B` had 7 branches and
+7,072 b, the proposed companion had 1,458 b. Do a second split ONLY into a new name
+(`FLOOR02C.MES` and onward).
 
-✅ Спутник МОЖЕТ сам звать (mes-call) -- замерено 2026-09-15, а не выведено. Раньше здесь
-стоял запрет: «в игре вложенных вызовов нет ни разу, значит опираться на них -- гадание».
-Гадание сняли опытом. Ветка FLOOR08 `(&& (== V 4) (== (: 485) 0))` -- диалог со стражем
-плюс `(mes-call "sento0f.mes")` -- вынесена в новый FLOOR08C.MES, и прогон совпал с
-контрольным ЗНАК В ЗНАК на всех 50 нажатиях: тот же диалог, бой вызвался ИЗНУТРИ спутника,
-game over, возврат на этаж. Это снимает 66 веток FLOOR08 из 71 с мели: почти весь его текст
-сидит в ветках с собственными вызовами, и без вложенности он не ужимался ничем, кроме
-порчи текста.
+✅ A companion CAN itself call (mes-call) -- measured 2026-09-15, not just inferred. There
+used to be a ban here: "the game never has nested calls, so relying on them is a guess."
+The guess was resolved by experiment. FLOOR08's branch `(&& (== V 4) (== (: 485) 0))` -- the
+guard dialogue plus `(mes-call "sento0f.mes")` -- was extracted into a new FLOOR08C.MES, and
+the run matched the control CHARACTER FOR CHARACTER across all 50 inputs: the same
+dialogue, the battle triggered FROM INSIDE the companion, game over, return to the floor.
+This clears 66 of FLOOR08's 71 stuck branches: nearly all its text sits in branches with
+their own calls, and without nesting it couldn't be tightened by anything but damaging
+the text.
 
-⚠️ Побочное наблюдение того же опыта: после разреза `state.identify` называет этаж
-START.MES вместо FLOOR08.MES (спутники и бои определяются верно). Значит ПОСЛЕ РАЗРЕЗА
-проверка живости по памяти врёт ещё и так -- вердикт снимать по экрану (`WW_SEQ`-режим
-`emu/goto.py`), как и договорились после вылета §30.
+⚠️ A side observation from the same experiment: after the split, `state.identify` names the
+floor as START.MES instead of FLOOR08.MES (companions and battles are identified
+correctly). So AFTER A SPLIT, the memory-based liveness check lies this way too -- read the
+verdict off the screen instead (`WW_SEQ` mode of `emu/goto.py`), as agreed after the §30
+crash.
 
-⚠️ Спутник НЕ определяет процедур: ни FLOOR08A, ни FLOOR09A не содержат define-proc,
-хотя зовут (proc 10). Определения родителя переживают вызов. Поэтому спутнику нужна
-только преамбула (meta/dict-build/slot/slot) и диспетчер с (break) в конце -- «отработал
-один раз и вернулся». У родителя цикл вечный, у спутника -- однократный.
+⚠️ A companion does NOT define procedures: neither FLOOR08A nor FLOOR09A contains a
+define-proc, even though they call (proc 10). The parent's definitions survive the call.
+So a companion only needs the preamble (meta/dict-build/slot/slot) and a dispatcher ending
+in (break) -- "ran once and returned." The parent's loop is forever, the companion's is
+single-shot.
 
-    tools/split.py FLOOR08.MES --into FLOOR08B.MES          # померить
-    tools/split.py FLOOR08.MES --into FLOOR08B.MES --apply  # записать
+    tools/split.py FLOOR08.MES --into FLOOR08B.MES          # measure
+    tools/split.py FLOOR08.MES --into FLOOR08B.MES --apply  # write
 """
 import argparse, pathlib, re, shutil, sys, tempfile
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
@@ -51,7 +55,7 @@ LIMIT = gates.MES_MAX
 
 
 def close(s, i):
-    """Индекс закрывающей скобки для открывающей на i. Строки и ; -- не скобки."""
+    """Index of the closing paren for the one opening at i. Strings and ; are not parens."""
     d, n = 0, len(s)
     while i < n:
         c = s[i]
@@ -74,7 +78,7 @@ def close(s, i):
 
 
 def sexprs(s, i, end):
-    """Спаны s-выражений верхнего уровня в срезе [i, end)."""
+    """Spans of top-level s-expressions in the slice [i, end)."""
     out = []
     while i < end:
         if s[i] == '(':
@@ -87,20 +91,20 @@ def sexprs(s, i, end):
 
 
 def main_cond(src):
-    """Спан самого крупного (cond ..) -- это диспетчер действий игрока."""
+    """Span of the largest (cond ..) -- that's the player-action dispatcher."""
     spans = [(m.start(), close(src, m.start())) for m in re.finditer(r'\(cond\b', src)]
     return max(spans, key=lambda p: p[1] - p[0])
 
 
 def branches(src):
-    """Ветки диспетчера, кроме (else ..), с разбором на условие и тело."""
+    """Dispatcher branches, excluding (else ..), parsed into condition and body."""
     a, b = main_cond(src)
     out = []
     for s, e in sexprs(src, a + len('(cond'), b):
         body = src[s:e]
         if body.startswith('(else'):
             continue
-        cs, ce = sexprs(src, s + 1, e - 1)[0]        # первое s-выражение -- условие
+        cs, ce = sexprs(src, s + 1, e - 1)[0]        # first s-expression -- the condition
         out.append({'span': (s, e), 'cond_end': ce, 'src': body,
                     'text': sum(len(x) for x in re.findall(r'"((?:[^"\\]|\\.)*)"', body)),
                     'nested': bool(re.search(r'mes-call|mes-jump', body)),
@@ -109,7 +113,7 @@ def branches(src):
 
 
 def preamble(src):
-    """Всё до первой инструкции верхнего уровня, не входящей в шапку спутника."""
+    """Everything before the first top-level instruction not part of the companion's head."""
     keep = ('(meta', '(dict-build', '(slot', '(set-arr~', '(field')
     i, out = src.index('(mes') + len('(mes'), []
     for s, e in sexprs(src, i, len(src)):
@@ -122,7 +126,7 @@ def preamble(src):
 
 
 def build(parent_src, picked, callee):
-    """(новый родитель, исходник спутника)."""
+    """(new parent, companion source)."""
     call = f'(<> (mes-call "{callee.lower()}"))'
     out, last = [], 0
     for br in sorted(picked, key=lambda b: b['span'][0]):
@@ -141,7 +145,7 @@ def build(parent_src, picked, callee):
 
 
 def size_of(src, name):
-    """Скомпилированный размер. Ответ даёт juice, не арифметика."""
+    """Compiled size. juice answers, not arithmetic."""
     tmp = pathlib.Path(tempfile.mkdtemp(prefix='split.'))
     (tmp / f'{name}.rkt').write_text(src, encoding='utf-8')
     gates.juice(['-cf', f'{name}.rkt'], tmp)
@@ -154,43 +158,45 @@ def size_of(src, name):
 def run():
     ap = argparse.ArgumentParser()
     ap.add_argument('name')
-    ap.add_argument('--into', required=True, help='имя файла-спутника, напр. FLOOR08B.MES')
+    ap.add_argument('--into', required=True, help='companion file name, e.g. FLOOR08B.MES')
     ap.add_argument('--margin', type=int, default=2000,
-                    help='запас под порогом: он доказан существованием, а не измерен')
+                    help='sub-threshold reserve: proven by existence, not measured')
     ap.add_argument('--apply', action='store_true')
     args = ap.parse_args()
 
-    # ⚠️ Занятое имя -- это стирание чужих веток (см. шапку). Ловушка сработала 2026-09-14
-    # на FLOOR05C, законном спутнике из уже выпущенного патча; тогда спасло только то, что
-    # оба файла лежали в git. Теперь отказ, а не внимательность.
+    # ⚠️ A taken name means wiping out someone else's branches (see the header). The trap
+    # fired on 2026-09-14 on FLOOR05C, a legit companion from an already-shipped patch; what
+    # saved it that time was only that both files were in git. Now it's a refusal, not
+    # just vigilance.
     if (EN / f'{args.into}.rkt').exists():
-        sys.exit(f'⛔ {args.into} уже существует -- разрез бы стёр его ветки целиком.\n'
-                 f'   Брать НОВОЕ имя (…C, …D и далее).')
+        sys.exit(f'⛔ {args.into} already exists -- the split would wipe its branches whole.\n'
+                 f'   Take a NEW name (…C, …D and onward).')
 
     src = (EN / f'{args.name}.rkt').read_text(encoding='utf-8')
     size0 = (EN / f'{args.name}.rkt.mes').stat().st_size
     brs = branches(src)
-    print(f'{args.name}: {size0} б, сверх порога {size0 - LIMIT} б; веток {len(brs)}')
+    print(f'{args.name}: {size0} b, over threshold by {size0 - LIMIT} b; branches {len(brs)}')
 
-    # берём самые тяжёлые, пока родитель не влезет -- размер спрашиваем у компилятора
-    # ⚠️ Ветка с `mes-jump` не выносится: jump ЗАМЕЩАЕТ сцену, и возвращаться спутнику
-    # будет некуда. `mes-call` выносится -- вложенный вызов проверен опытом (см. шапку).
+    # take the heaviest ones until the parent fits -- size comes from the compiler
+    # ⚠️ A branch with `mes-jump` isn't extracted: a jump REPLACES the scene, and the
+    # companion would have nowhere to return to. `mes-call` is extracted -- nested calls are
+    # verified by experiment (see the header).
     movable = [b for b in brs if 'mes-jump' not in b['src']]
     nested = sum(1 for b in movable if b['nested'])
-    print(f'  выносимых: {len(movable)} из {len(brs)} (из них с вложенным вызовом {nested}), '
-          f'в них {sum(b["text"] for b in movable)} знаков текста', flush=True)
-    # ⚠️ Запас -- ЦЕЛЬ, а не требование: весь оставшийся текст сидит в ветках с
-    # собственными вызовами, глубже жать нечем. Берём лучшее достижимое и
-    # останавливаемся, когда вынос перестал помогать -- пустая ветка весит меньше,
-    # чем ставящийся на её место (mes-call ..), и родитель растёт: измерено 30 веток
-    # -> 39 172 б, 31-я -> 39 182, 35-я -> 39 222.
+    print(f'  extractable: {len(movable)} of {len(brs)} (of those with a nested call {nested}), '
+          f'with {sum(b["text"] for b in movable)} chars of text in them', flush=True)
+    # ⚠️ The margin is a TARGET, not a requirement: all the remaining text sits in branches
+    # with their own calls, there's nothing deeper to squeeze. We take the best achievable
+    # and stop once extracting stops helping -- an empty branch weighs less than the
+    # (mes-call ..) put in its place, and the parent grows: measured 30 branches -> 39,172 b,
+    # the 31st -> 39,182, the 35th -> 39,222.
     picked, best, stall = [], None, 0
     for br in sorted(movable, key=lambda b: -b['text']):
         picked.append(br)
         parent, comp = build(src, picked, args.into)
         pn, cn = size_of(parent, args.name), size_of(comp, args.into)
-        print(f'  вынесено {len(picked):2d}: {br["text"]:5d} знаков  родитель {pn} б, '
-              f'спутник {cn} б  {br["label"]}', flush=True)
+        print(f'  extracted {len(picked):2d}: {br["text"]:5d} chars  parent {pn} b, '
+              f'companion {cn} b  {br["label"]}', flush=True)
         if best is None or pn < best[0]:
             best, stall = (pn, cn, list(picked), parent, comp), 0
         else:
@@ -198,16 +204,16 @@ def run():
         if 0 < pn <= LIMIT - args.margin and 0 < cn <= LIMIT:
             break
         if stall >= 2:
-            print('  вынос перестал уменьшать родителя -- останавливаюсь', flush=True)
+            print('extract no longer shrinks the parent -- stopping', flush=True)
             break
     pn, cn, picked, parent, comp = best
     if not (0 < pn <= LIMIT and 0 < cn <= LIMIT):
-        print(f'\nне сошлось: лучшее -- родитель {pn} б, спутник {cn} б, порог {LIMIT}')
+        print(f'\ndid not converge: best -- parent {pn} b, companion {cn} b, threshold {LIMIT}')
         return
     if pn > LIMIT - args.margin:
-        print(f'\n⚠️ запас {LIMIT - pn} б вместо заданных {args.margin}: остальной текст '
-              f'сидит в ветках с вызовами, выносить их нельзя')
-    print(f'\nлучшее: вынесено {len(picked)} веток')
+        print(f'\n⚠️ margin {LIMIT - pn} b instead of the requested {args.margin}: the rest of '
+              f'the text sits in branches with calls, cannot extract them')
+    print(f'\nbest: extracted {len(picked)} branches')
 
     tmp = pathlib.Path(tempfile.mkdtemp(prefix='splitgate.'))
     for nm, s in ((args.name, parent), (args.into, comp)):
@@ -215,29 +221,30 @@ def run():
     shutil.copyfile(EN / f'{args.name}.orig.rkt', tmp / f'{args.name}.orig.rkt')
     g = gates.juice(['-cf', f'{args.name}.rkt'], tmp), gates.juice(['-cf', f'{args.into}.rkt'], tmp)
     ok = all((tmp / f'{n}.rkt.mes').exists() for n in (args.name, args.into))
-    print(f'\nкомпиляция обоих: {"ok" if ok else "СБОЙ"}')
-    print(f'{size0} -> родитель {pn} б + спутник {cn} б (порог {LIMIT} на файл)')
-    # ⚠️ Гейт структуры здесь неприменим: он сверяет скелет с .orig.rkt, а мы структуру
-    # меняем НАМЕРЕННО. Единственная настоящая проверка -- зайти в комнату в эмуляторе.
+    print(f'\ncompiling both: {"ok" if ok else "FAIL"}')
+    print(f'{size0} -> parent {pn} b + companion {cn} b (threshold {LIMIT} per file)')
+    # ⚠️ The structure gate doesn't apply here: it compares the skeleton against .orig.rkt,
+    # and we're changing the structure ON PURPOSE. The one real check is entering the room
+    # in the emulator.
     if args.apply and ok:
         (EN / f'{args.name}.rkt').write_text(parent, encoding='utf-8')
         (EN / f'{args.into}.rkt').write_text(comp, encoding='utf-8')
         shutil.copyfile(tmp / f'{args.name}.rkt.mes', EN / f'{args.name}.rkt.mes')
         shutil.copyfile(tmp / f'{args.into}.rkt.mes', EN / f'{args.into}.rkt.mes')
-        print(f'\nзаписано: en/{args.name}.rkt и en/{args.into}.rkt (+ .mes)')
-        print('⚠️ проверить в эмуляторе: зайти в комнату и вызвать вынесенные ветки')
+        print(f'\nwritten: en/{args.name}.rkt and en/{args.into}.rkt (+ .mes)')
+        print('⚠️ verify in emulator: enter the room and invoke the extracted branches')
     else:
-        print(f'\nНЕ ЗАПИСАНО. Применить: tools/split.py {args.name} --into {args.into} --apply')
+        print(f'\nNOT WRITTEN. Apply with: tools/split.py {args.name} --into {args.into} --apply')
     shutil.rmtree(tmp, ignore_errors=True)
 
 
 
 
 def companions(name):
-    """Спутники, которых родитель зовёт и которых В ИГРЕ НЕ БЫЛО -- то есть наши.
+    """Companions the parent calls that WEREN'T IN THE GAME -- i.e. ours.
 
-    Отличаем по отсутствию японского оригинала: floor08a.mes родной (у него есть
-    FLOOR08A.MES.orig.rkt), floor08b.mes создан разрезом.
+    Told apart by the absence of a Japanese original: floor08a.mes is native (it has
+    FLOOR08A.MES.orig.rkt), floor08b.mes was created by a split.
     """
     src = (EN / f'{name}.rkt').read_text(encoding='utf-8')
     out = []
@@ -249,15 +256,15 @@ def companions(name):
 
 
 def unsplit(name):
-    """Исходник, каким он был бы без разреза: тела веток возвращены из спутников.
+    """The source as it would look without the split: branch bodies restored from companions.
 
-    ⚠️ Зачем. Гейт структуры сверяет скелет с японским оригиналом, а разрез структуру
-    меняет НАМЕРЕННО -- после разреза девяти комнат recompile дал ok=84 bad=9, и все
-    девять «провалов» это разрезанные родители. Списать их на «так и задумано» нельзя:
-    этот гейт -- единственное, что доказывает, что скрипт не покорёжен, и отключить его
-    там, где мы больше всего наменяли, значит остаться без страховки. Поэтому сверяем
-    реконструкцию. Побочная выгода: совпадение скелета доказывает, что разрез не потерял
-    и не переставил ни одной ветки.
+    ⚠️ Why. The structure gate compares the skeleton against the Japanese original, and a
+    split changes the structure ON PURPOSE -- after splitting nine rooms, recompile gave
+    ok=84 bad=9, and all nine "failures" were split parents. Chalking them up to "that's
+    intended" isn't good enough: that gate is the only thing proving the script isn't
+    mangled, and disabling it exactly where we changed the most means going without a
+    safety net. So we compare the reconstruction instead. Side benefit: a matching skeleton
+    proves the split didn't lose or reorder a single branch.
     """
     src = (EN / f'{name}.rkt').read_text(encoding='utf-8')
     bodies = {}
@@ -284,29 +291,29 @@ def unsplit(name):
     return ''.join(out), restored
 
 
-if __name__ == '__main__':     # ⚠️ иначе импорт ради unsplit() запускает разбор argv
+if __name__ == '__main__':     # ⚠️ otherwise importing for unsplit() triggers argv parsing
     run()
 
 
 def gate_split_parent(name):
-    """Гейт для разрезанного родителя. None -- всё честно.
+    """Gate for a split parent. None -- all clear.
 
-    Цепочка из двух звеньев, вместе равная обычному gate_compile_and_structure:
-      1. реконструкция (родитель + спутники) совпадает по скелету с японским оригиналом
-         -- значит разрез не потерял и не переставил ни одной ветки;
-      2. родитель компилируется и разбирается обратно в себя же -- значит компилятор
-         ничего не покорёжил.
-    Первое звено заменяет сверку с оригиналом, которая после разреза невозможна;
-    второе сохраняет проверку компиляции, которая от разреза не зависит.
+    A two-link chain that together equals the regular gate_compile_and_structure:
+      1. the reconstruction (parent + companions) matches the Japanese original by skeleton
+         -- meaning the split didn't lose or reorder a single branch;
+      2. the parent compiles and decompiles back into itself -- meaning the compiler
+         mangled nothing.
+    The first link replaces the comparison against the original, which is impossible after
+    a split; the second keeps the compilation check, which doesn't depend on the split.
     """
     rec, k = unsplit(name)
     if not k:
-        return f'{name}: реконструкция не вернула ни одной ветки -- спутники не найдены'
+        return f'{name}: reconstruction returned no branches -- no companions found'
     orig = (EN / f'{name}.orig.rkt').read_text(encoding='utf-8')
     if gates.skeleton(orig) != gates.skeleton(rec):
         a, b = gates.skeleton(orig), gates.skeleton(rec)
         i = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
-        return f'реконструкция расходится с оригиналом на {i}: …{a[max(0,i-40):i+40]}…'
+        return f'reconstruction diverges from the original at {i}: …{a[max(0,i-40):i+40]}…'
 
     tmp = pathlib.Path(tempfile.mkdtemp(prefix='splitgate.'))
     try:
@@ -324,7 +331,7 @@ def gate_split_parent(name):
             return 'recompiled file will not decompile'
         if gates.skeleton(got.read_text(encoding='utf-8')) != gates.skeleton(
                 (EN / f'{name}.rkt').read_text(encoding='utf-8')):
-            return 'компиляция не обратима: разобранный файл не совпал с исходником'
+            return 'compilation not reversible: parsed file does not match source'
         return gates.gate_size(mes)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""Что игрок увидит в окне сообщения -- посчитанное, а не угаданное.
+"""What the player will see in the message window -- computed, not guessed.
 
-Разрывы строк ставят ДВА механизма, и беда живёт ровно на их стыке:
+Line breaks are set by TWO mechanisms, and the trouble lives exactly at their seam:
 
-1. **juice при компиляции** (`engine/ai5/mes-compiler.rkt`, `text-wrap*`) режет
-   КАЖДЫЙ строковый кусок ОТДЕЛЬНО и ОТ НУЛЕВОЙ КОЛОНКИ по `(wordwrap 46)`, вставляя
-   жёсткий перевод строки. Подстановку имени (`0`) он пропускает мимо и колонку через
-   неё не переносит.
-2. **движок при выводе** заполняет окно шириной 56 и рвёт по краю где придётся --
-   японскому перенос по словам не нужен.
+1. **juice at compile time** (`engine/ai5/mes-compiler.rkt`, `text-wrap*`) wraps EACH
+   string chunk SEPARATELY, FROM COLUMN ZERO, by `(wordwrap 46)`, inserting a hard line
+   break. It skips right past the name insertion (`0`) and doesn't carry the column
+   across it.
+2. **the engine at render time** fills a window 56 wide and breaks at the edge wherever
+   that lands -- Japanese doesn't need word wrapping.
 
-Отсюда типовой брак: кусок из 43 знаков juice считает коротким, а на экране он
-начинается с 16-й колонки, выходит 59 и рвётся по краю -- слово-сирота на своей строке,
-а следом жёсткий перевод строки от juice её закрывает.
+Hence the typical defect: juice sees a 43-char chunk as short, but on screen it starts at
+column 16, comes out to 59, and breaks at the edge -- an orphan word on its own line,
+followed by juice's own hard break closing it off.
 
-Здесь оба механизма воспроизведены по коду компилятора, так что раскладку можно
-проверять без эмулятора. Сверено с кадром: `FLOOR05B` реплика Тэсио -- 4 строки знак
-в знак (`tools/render.py --selftest`).
+Both mechanisms are reproduced here from the compiler's code, so layout can be checked
+without the emulator. Verified against a frame: `FLOOR05B`, Teshio's line -- 4 lines
+character for character (`tools/render.py --selftest`).
 """
 import re
 
@@ -24,21 +24,22 @@ import re
 
 _MARK = re.compile(r'\{(\d+)\}')
 
-WRAP = 46          # (wordwrap 46) из meta -- порог juice
-WIDTH = 56         # ширина окна сообщения, снята с кадра findings/0015.png
-NAME = 6           # длина имени героя; в наших сохранениях Astral/Pollux -- по 6
-# ⚠️ Рвём на ОДИН знак раньше края окна. Строка ровно в 56 знаков движок переносит САМ, и
-# наш явный перевод строки ложится вторым -- на экране появляется пустая строка (замерено:
-# 867 реплик после первой версии раскладки). Один знак плотности дешевле этой ямы, и заодно
-# страхует, если полезная ширина окна на самом деле 55, а не 56.
+WRAP = 46          # (wordwrap 46) from meta -- juice's threshold
+WIDTH = 56         # message window width, taken from frame findings/0015.png
+NAME = 6           # hero name length; in our saves Astral/Pollux are both 6
+# ⚠️ We break ONE char short of the window edge. A line of exactly 56 chars the engine wraps
+# ITSELF, and our explicit line break lands second -- an empty line shows up on screen
+# (measured: 867 lines after the first layout version). One char of slack is cheaper than
+# that pothole, and it also hedges in case the usable window width is really 55, not 56.
 LINE = WIDTH - 1
-# ⚠️ Потолок добивки. Ряд в полсотни пробелов УБИВАЕТ игру -- на этом валилось сохранение
-# в комнате героя (STATUS.md §12). Не влезли в потолок -- разрыв не ставим вовсе.
+# ⚠️ Padding ceiling. A row of fifty-odd spaces KILLS the game -- that's what crashed the
+# save in the hero's room (STATUS.md §12). Doesn't fit the ceiling -- we don't insert the
+# break at all.
 MAX_PAD = 16
 
 
 def _chop(words, w):
-    """Один проход juice: сколько слов влезает в порог. Цена слова -- len+1."""
+    """One juice pass: how many words fit the threshold. Word cost is len+1."""
     take, c = [], 0
     for s in words:
         n = len(s) + 1
@@ -50,26 +51,26 @@ def _chop(words, w):
 
 
 def wrap_chunk(s, w=WRAP):
-    """`text-wrap*`: строковый кусок -> куски со вставленными переводами строки."""
+    """`text-wrap*`: a string chunk -> chunks with line breaks inserted."""
     if not w:
         return [s]
     words = s.split(' ')
     if not words or w <= max(len(x) for x in words) + 1:
-        return [s]                      # длинное слово -- juice не трогает кусок вовсе
+        return [s]                      # a long word -- juice doesn't touch the chunk at all
     rest, out = words, []
     while rest:
         take, rest = _chop(rest, (w // 2) * 2)
-        if not take:                    # защита от зацикливания
+        if not take:                    # guard against looping forever
             out.append(' '.join(rest)); break
         out.append(' '.join(take))
     return [x + '\n' for x in out[:-1]] + [out[-1]]
 
 
 def compile_parts(parts, w=WRAP):
-    """Что окажется в .mes: строки уже с жёсткими переводами строки от juice.
+    """What ends up in the .mes: strings already carrying juice's hard line breaks.
 
-    `parts` -- элементы формы (text …): строки и не-строки (подстановка имени).
-    juice сперва склеивает соседние строки, не оканчивающиеся переводом строки.
+    `parts` are the elements of a (text …) form: strings and non-strings (name insertion).
+    juice first merges adjacent strings that don't end in a line break.
     """
     merged, out = [], []
     for p in parts:
@@ -84,10 +85,11 @@ def compile_parts(parts, w=WRAP):
 
 
 def screen(parts, name=NAME, w=WRAP, width=WIDTH, col0=0):
-    """Строки на экране: сначала компиляция juice, потом заполнение окна движком.
+    """Lines on screen: first juice's compilation, then the engine filling the window.
 
-    `col0` -- колонка, на которой форма начинает печатать (см. `tools/column.py`).
-    Первая строка при этом короче на `col0` -- ровно так её и заполняет движок.
+    `col0` -- the column at which the form starts printing (see `tools/column.py`).
+    The first line is shorter by `col0` accordingly -- that's exactly how the engine
+    fills it.
     """
     text = ''.join('x' * name if not isinstance(p, str) else p
                    for p in compile_parts(parts, w))
@@ -105,26 +107,26 @@ def screen(parts, name=NAME, w=WRAP, width=WIDTH, col0=0):
 
 
 def layout_text(en, name=NAME, width=LINE, col0=0):
-    """Плоский текст с маркерами {N} -> он же с явными переводами строк.
+    """Flat text with {N} markers -> the same text with explicit line breaks.
 
-    Считаем колонку сквозь всю реплику: подстановка имени -- такое же слово шириной
-    `name`, и переносится целиком. Раньше она считалась в колонку, но переносом НЕ
-    проверялась, и уезжала за край: `...weaker than xxxxx` / `x` / `.` -- имя разорвано
-    пополам, точка отдельной строкой (55 реплик, замер 2026-09-11).
+    We track the column across the whole line: a name insertion is just a word of width
+    `name`, and wraps as a whole. It used to be counted toward the column but NOT checked
+    for wrapping, and ran off the edge: `...weaker than xxxxx` / `x` / `.` -- the name torn
+    in half, the period on its own line (55 lines, measured 2026-09-11).
 
-    Работаем на плоском тексте, а не на элементах формы, потому что разрыв нередко нужен
-    ПЕРЕД подстановкой -- то есть в конце предыдущего элемента. На плоской строке это
-    просто позиция, а по элементам приходилось бы тянуться назад.
+    We work on flat text rather than form elements because a break is often needed BEFORE
+    an insertion -- i.e. at the end of the previous element. On a flat string that's just a
+    position; with elements we'd have to reach backward.
     """
     def wide(tok):
         return len(_MARK.sub('X' * name, tok))
 
-    # ⚠️ col0 -- КОЛОНКА, НА КОТОРОЙ ФОРМА НАЧНЁТ ПЕЧАТАТЬ. Не всегда ноль: движок пишет в
-    # одно окно подряд, и форме нередко предшествует другая без (wait) между ними -- имя
-    # говорящего собирается из трёх форм, направление печатается отдельным «Front. ».
-    # Раскладка этого не знала, строка уезжала за край и движок рвал её ПОСЕРЕДИНЕ СЛОВА
-    # (`tools/column.py`).
-    out, col, fresh = [], col0, False     # fresh -- строку только что перенесли
+    # ⚠️ col0 is THE COLUMN AT WHICH THE FORM WILL START PRINTING. Not always zero: the
+    # engine writes into one window continuously, and a form is often preceded by another
+    # without a (wait) between them -- the speaker's name is assembled from three forms, the
+    # direction is printed as a separate "Front. ". Layout didn't know this, the line ran
+    # off the edge and the engine broke it MID-WORD (`tools/column.py`).
+    out, col, fresh = [], col0, False     # fresh -- the line was just wrapped
     for word, sep in _words(en):
         n = wide(word)
         if col + n > width and col:
@@ -137,27 +139,29 @@ def layout_text(en, name=NAME, width=LINE, col0=0):
             if sep:
                 out.append(sep); col += len(sep)
         elif not fresh:
-            # ⚠️ ВЕДУЩИЙ ПРОБЕЛ КУСКА -- ЗНАЧИМЫЙ. Кусок нередко продолжает то, что уже
-            # выведено соседней формой: `(text " as many Healing Herbs…")`. Снятый пробел
-            # склеивает слова -- это дефект класса «Manfound», который агент и ловит
-            # глазами. Снимаем пробел ТОЛЬКО сразу после переноса, где он стал бы отступом.
+            # ⚠️ A CHUNK'S LEADING SPACE IS SIGNIFICANT. A chunk often continues what a
+            # neighboring form already printed: `(text " as many Healing Herbs…")`. Dropping
+            # the space glues words together -- a "Manfound"-class defect that an agent
+            # catches by eye. We only drop the space right after a wrap, where it would
+            # become an indent.
             out.append(sep); col += len(sep)
     return ''.join(out)
 
 
 
 def pad_breaks(s, name=NAME, width=WIDTH, max_pad=MAX_PAD, col0=0):
-    """Заменить явные переводы строк добивкой пробелами до края окна.
+    """Replace explicit line breaks with space padding out to the window edge.
 
-    ⚠️ Нужно там, где реплика несёт НЕ подстановку имени, а `(number …)`. Явный перевод
-    строки режет форму надвое, и в скелете появляется лишняя `(TEXT )`; гейт схлопывает
-    соседние текстовые формы, но только пока внутри них нет вложенной формы -- а `(number …)`
-    как раз вложенная. Добивка же меняет ТОЛЬКО содержимое строки, которое `skeleton()`
-    обнуляет, поэтому структура остаётся прежней.
+    ⚠️ Needed where a line carries NOT a name insertion but a `(number …)`. An explicit line
+    break cuts the form in two, and the skeleton gets an extra `(TEXT )`; the gate collapses
+    adjacent text forms, but only while there's no nested form inside them -- and
+    `(number …)` is exactly that, nested. Padding, by contrast, changes ONLY the line
+    content, which `skeleton()` zeroes out anyway, so the structure stays the same.
 
-    ⚠️ Ширина числа неизвестна: `(number …)` печатает от одной цифры до пяти, а считаем мы
-    его как имя (`NAME`). Добивка тут приблизительна -- но не хуже прежней, которая тоже
-    считала по имени. Таких реплик 18 на всю игру (замер 2026-09-11).
+    ⚠️ The number's width is unknown: `(number …)` prints anywhere from one digit to five,
+    and we count it as a name (`NAME`). The padding here is approximate -- but no worse than
+    the old version, which also counted it as a name. There are 18 such lines in the whole
+    game (measured 2026-09-11).
     """
     segs = s.split('\n')
     out, col = [], col0
@@ -170,11 +174,11 @@ def pad_breaks(s, name=NAME, width=WIDTH, max_pad=MAX_PAD, col0=0):
                 out.append(' ' * need)
                 col = 0
             else:
-                col %= width          # добивка не влезла -- движок порвёт сам
+                col %= width          # padding didn't fit -- the engine will break it itself
     return ''.join(out)
 
 def _words(s):
-    """Слова и разделители после них: («Привет», « ») …"""
+    """Words and the separator after each: ("Hello", " ") …"""
     out, i = [], 0
     while i < len(s):
         j = i
@@ -188,7 +192,7 @@ def _words(s):
     return out
 
 
-# ---------------------------------------------------------------- ревизия раскладки
+# ---------------------------------------------------------------- layout audit
 import pathlib, re, sys                                              # noqa: E402
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from strings import forms                                            # noqa: E402
@@ -197,7 +201,7 @@ from strings import unescape                                         # noqa: E40
 
 
 def parts_of(en):
-    """Текст с маркерами {N} -> элементы формы (text …): строки и подстановки."""
+    """Text with {N} markers -> elements of a (text …) form: strings and insertions."""
     out, i = [], 0
     for m in _MARK.finditer(en):
         if m.start() > i:
@@ -210,37 +214,39 @@ def parts_of(en):
 
 
 def flaws(lines, width=WIDTH, col0=0):
-    """Что здесь плохо для читателя.
+    """What's wrong here for the reader.
 
-    ⚠️ `col0` обязателен для ПЕРВОЙ строки: она короче на столько, на сколько форма
-    начинает печатать не с нуля. Без него разорванное слово не опознавалось -- строка
-    «...for unauth» длиной 48 не равна ширине окна, а на экране она ровно 56 вместе с
-    напечатанным до неё «Front. ». Так дефект и проехал мимо проверки.
+    ⚠️ `col0` is mandatory for the FIRST line: it's shorter by however much the form starts
+    printing above zero. Without it a broken word went undetected -- the line
+    "...for unauth" is 48 chars, not equal to the window width, but on screen it's exactly
+    56 together with the "Front. " printed before it. That's how the defect slipped past
+    the check.
     """
     bad = []
     for i, ln in enumerate(lines):
         nxt = lines[i + 1] if i + 1 < len(lines) else None
         full = len(ln) + (col0 if i == 0 else 0)
-        # ⚠️ Сеть на «вылезли на один квадрат справа» (игрок, 2026-09-13, магазин).
-        # Замер по кадрам (`emu/textbox.py`, сверено здесь же): знакоместа идут с x=96
-        # шагом 8, колонок 56, последняя кончается на 543, чёрное окно -- на 545. То есть
-        # 56 колонок ровно влезают, а 57-я (544…551) ложится уже на рамку и после очистки
-        # окна там и остаётся -- пробел движок рисует чёрным глифом, а не пустотой.
-        # `layout_text` рвёт по LINE=55 и до края не доходит НИКОГДА. Единственные строки
-        # ровно в 56 -- те, что `pad_breaks` добил пробелами до WIDTH; их 19, все денежные
-        # реплики магазинов, и брак игрок видит именно в магазинах.
-        # ⚠️ ЧЕГО НЕ ДОКАЗАНО: почему движок ставит 57-е знакоместо, если рвёт по 56-му.
-        # Пока правило -- подозрение по совпадению места, а не измеренная причина.
+        # ⚠️ A net for "overran by one cell to the right" (a player, 2026-09-13, a shop).
+        # Measured from frames (`emu/textbox.py`, cross-checked here): cells run from x=96
+        # in steps of 8, 56 columns, the last one ends at 543, the black window at 545. So
+        # exactly 56 columns fit, and the 57th (544…551) already lands on the frame and
+        # stays there after the window clears -- the engine draws that space as a black
+        # glyph, not emptiness. `layout_text` breaks at LINE=55 and NEVER reaches the edge.
+        # The only lines that hit exactly 56 are the ones `pad_breaks` padded with spaces up
+        # to WIDTH; there are 19 of them, all shop money lines, and that's exactly where the
+        # player sees the defect -- in shops.
+        # ⚠️ WHAT ISN'T PROVEN: why the engine places a 57th cell if it breaks at the 56th.
+        # For now the rule is a suspicion by coincidence of location, not a measured cause.
         if full > LINE:
-            bad.append('строка шире поля текста')
+            bad.append('line wider than text field')
         if full == width and nxt and ln[-1] != ' ' and nxt[:1] not in ('', ' '):
-            bad.append('слово разорвано')
+            bad.append('word broken')
         if re.search(r'\S {2,}\S', ln):
-            bad.append('дыра в строке')
-        # сирота: короткая строка после полной, и это не конец реплики
+            bad.append('gap in line')
+        # orphan: a short line after a full one, and it's not the end of the line
         prev = len(lines[i - 1]) + (col0 if i == 1 else 0) if i else 0
         if nxt is not None and i and prev >= width - 1 and len(ln.strip()) <= 12:
-            bad.append('слово-сирота')
+            bad.append('orphan word')
     return bad
 
 
@@ -255,11 +261,12 @@ def scan(en_dir):
         for form in forms(src):
             en = unescape(form['ja'])
             if any(ord(c) > 126 for c in en):
-                continue                       # японский: перенос по словам не нужен
-            # ⚠️ w=0: переноса от juice БОЛЬШЕ НЕТ -- `relayout.py` снял `(wordwrap 46)` из
-            # meta всех 62 файлов (проверяется `grep -l wordwrap en/*.MES.rkt` -> пусто).
-            # Со старым порогом ревизия считала лишний механизм и выдавала 26 «сирот» на
-            # ровном месте; на самих кадрах их нет.
+                continue                       # Japanese: no word wrap needed
+            # ⚠️ w=0: juice's wrapping is GONE NOW -- `relayout.py` stripped `(wordwrap 46)`
+            # from the meta of all 62 files (checked with `grep -l wordwrap en/*.MES.rkt` ->
+            # empty). With the old threshold the audit counted a mechanism that no longer
+            # applies and reported 26 "orphans" for no reason; the frames themselves show
+            # none.
             c0 = cols.get(form['start'], 0)
             ls = screen(parts_of(en), w=0, col0=c0)
             bad = flaws(ls, col0=c0)
@@ -277,13 +284,13 @@ if __name__ == '__main__':
                 "Sharon aren't getting along? ...They say",
                 'Sharon     prefers a manly man.']
         got = screen(p)
-        assert got == want, f'симулятор разошёлся с кадром:\n{got}\n{want}'
-        print('✅ самопроверка: кадр Тэсио воспроизведён знак в знак')
+        assert got == want, f'simulator diverged from the frame:\n{got}\n{want}'
+        print('✅ self-check: Teshio frame reproduced character by character')
     else:
         rows = scan(pathlib.Path(__file__).resolve().parent.parent / 'en')
         from collections import Counter
         c = Counter(k for *_, bad in rows for k in bad)
-        print(f'реплик с браком раскладки: {len(rows)}')
+        print(f'lines with layout defects: {len(rows)}')
         for k, n in c.most_common():
             print(f'  {k}: {n}')
         for name, en, ls, bad in rows[:6]:

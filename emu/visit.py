@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Загрузиться в заданную сцену и пройти её нажатиями — вердикт по ЭКРАНУ.
+"""Load into a given scene and walk through it with key presses — verdict from the SCREEN.
 
-Зачем отдельно от `goto.py`. Тот ходит по карте этажа, и в лавке, на постоялом дворе или в
-меню карты нет вовсе: `state.floormap` возвращает пусто, и goto выходит, не начав. А
-проверять лавки надо: их реплики о деньгах собраны из половин (`tools/shopfix.py`) и
-ломались именно они.
+Why separate from `goto.py`. That one walks the floor map, and in a shop, at the inn, or in
+the map menu there is none at all: `state.floormap` returns empty, and goto bails without starting. But
+shops must be checked: their dialogue about money is assembled from halves (`tools/shopfix.py`) and
+those were the ones that broke.
 
-⚠️ Жив или мёртв решает ЭКРАН, а не память. Выходя в DOS, игра память не чистит, и
-`state.identify` ещё долго рапортует сцену резидентной — так пропустили вылет §30.
+⚠️ Alive or dead is decided by the SCREEN, not by memory. When exiting to DOS, the game doesn't clear memory, and
+`state.identify` keeps reporting the scene as resident for a long time — that's how we missed the crash in §30.
 
-⚠️ Телепорт делает вызывающий: имя сцены лежит ASCII-строкой в начале слота `FLAG0`.
+⚠️ The caller performs the teleport: the scene name sits as an ASCII string at the start of slot `FLAG0`.
 
-    WW_SEQ="return_key*6,down,return_key*4" emu/.venv/bin/python emu/visit.py <образ.hdi>
+    WW_SEQ="return_key*6,down,return_key*4" emu/.venv/bin/python emu/visit.py <image.hdi>
 """
 import os
 import pathlib
@@ -37,7 +37,7 @@ SYSTEM = pathlib.Path(os.environ.get('WW_SYSTEM') or (EMU / 'system'))
 SCR.mkdir(parents=True, exist_ok=True)
 OUT = SCR / 'frames'
 OUT.mkdir(exist_ok=True)
-BLACK = 0.01                       # доля незачернённого экрана, ниже которой это DOS
+BLACK = 0.01                       # fraction of non-blackened screen below which it's DOS
 
 src = pathlib.Path(sys.argv[1]).resolve()
 img = SCR / src.name
@@ -96,7 +96,7 @@ with sess:
     boot.drive(press, run, frame, log=lambda m: None)
     snap = bytearray(sess.core.serialize_size())
     sess.core.serialize(snap)
-    print(f'загрузка: сцена={S.identify(bytes(snap))["scene"]}', flush=True)
+    print(f'boot: scene={S.identify(bytes(snap))["scene"]}', flush=True)
     seen, dead = set(), False
     for i, k in enumerate(keys(os.environ.get('WW_SEQ', 'return_key*20')), 1):
         press(k)
@@ -117,12 +117,12 @@ with sess:
             run(600)
             f2 = frame()
             if f2 is not None and float((f2.sum(axis=2) > 24).mean()) < BLACK:
-                mark = '  ❌ ЭКРАН ЧЁРНЫЙ — ВЫШЛА В DOS'
+                mark = '❌ BLACK SCREEN — EXITED TO DOS'
                 dead = True
-        print(f'  {i:3d} {k:12} экран {100 * lit:5.1f}%  {txt[:56]}{mark}', flush=True)
+        print(f'  {i:3d} {k:12} screen {100 * lit:5.1f}%  {txt[:56]}{mark}', flush=True)
         if dead:
             break
-    print(f'\nразных реплик показано: {len(seen)}')
-    print('❌ ВЫШЛА В DOS' if dead else '✅ сцена пройдена, игра жива', flush=True)
-    print(f'кадры: {OUT}', flush=True)
+    print(f'\ndistinct lines shown: {len(seen)}')
+    print('❌ EXITED TO DOS' if dead else '✅ scene passed, game is alive', flush=True)
+    print(f'frames: {OUT}', flush=True)
 raise SystemExit(1 if dead else 0)

@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
-"""Где внутри HDD-образа начинается раздел с файлами.
+"""Where the file partition starts inside an HDD image.
 
-⚠️ Раньше во всех инструментах стояло `offset=71680` — смещение раздела ИМЕННО НАШЕГО
-образа. Для нас это работало, а на чужом HDI раздел начинается в другом месте: mtools не
-находит там файловой системы, патч не применяет НИ ОДНОГО файла и делает это молча —
-«применено 0, предупреждений 0» выглядит как успех. Патч едет к людям с их собственными
-образами, поэтому смещение нужно искать, а не помнить.
+⚠️ Every tool used to hard-code `offset=71680` -- the partition offset of OUR image specifically.
+It worked for us, but on someone else's HDI the partition starts elsewhere: mtools finds no
+filesystem there, and the patch applies NOT A SINGLE file and does it silently --
+"applied 0, warnings 0" looks like success. The patch goes out to people with their own
+images, so the offset has to be searched for, not remembered.
 
-Ищем загрузочный сектор FAT по BPB: строка типа ФС на +0x36 плюс осмысленные поля.
-Шаг 512 б: раздел всегда выровнен по сектору.
+We look for the FAT boot sector by its BPB: the filesystem type string at +0x36 plus sane fields.
+Step 512 b: a partition is always sector-aligned.
 
-⚠️ Подпись 0x55AA НЕ проверяем. У нашего же образа её на +510 нет вовсе (там нули), потому
-что сектор на PC-98 — 1024 байта, и признак «конец сектора» стоит в другом месте. Первая
-детектора требовала подпись и не нашла раздел ни в одном из трёх наших образов — то есть
-проверка была строже действительности.
+⚠️ We do NOT check the 0x55AA signature. Our own image has none at +510 (zeros there), because
+a PC-98 sector is 1024 bytes and the "end of sector" mark sits elsewhere. The first version of
+the detector required the signature and found the partition in none of our three images -- the
+check was stricter than reality.
 """
 import pathlib
 
 STEP = 512
-LIMIT = 16 << 20          # раздел с игрой лежит в начале диска; дальше не ищем
+LIMIT = 16 << 20          # the game partition is at the beginning of the disk; we don't search further
 FSTYPE = (b'FAT12   ', b'FAT16   ')
 
 
 def find_offset(img, limit=LIMIT):
-    """Смещение первого раздела FAT в байтах, или None."""
+    """Offset of the first FAT region in bytes, or None."""
     p = pathlib.Path(img)
     with p.open('rb') as f:
         blob = f.read(min(limit, p.stat().st_size))
@@ -41,10 +41,10 @@ def find_offset(img, limit=LIMIT):
 
 
 def mtoolsrc(img, path, drive='z'):
-    """Написать конфиг mtools для образа. Возвращает найденное смещение."""
+    """Write an mtools config for the image. Returns the found offset."""
     off = find_offset(img)
     if off is None:
-        raise SystemExit(f'в образе {img} не найден раздел FAT — это точно образ игры?')
+        raise SystemExit(f'no FAT partition found in image {img} — is this really a game image?')
     pathlib.Path(path).write_text(f'drive {drive}: file="{img}" offset={off}\n')
     return off
 

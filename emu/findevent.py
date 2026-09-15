@@ -1,11 +1,12 @@
-"""Где на этаже лежит событие с нужным номером — по карте из памяти, а не ногами.
+"""Where on the floor the event with the wanted number sits -- from the in-memory map, not by foot.
 
-Ветка, на которой игра вылетела (§27), закрыта условием `V == 3`, а `V` приходит из опкода
-`(field 261)`: движок водит игрока и возвращает номер события, на которое тот наступил.
-Номер события записан В САМОЙ КАРТЕ — `state.floormap()` разбирает клетки и отдаёт у каждой
-поле `event`. Значит нужную комнату можно не искать обходом, а прочитать.
+The branch where the game crashed (§27) is gated by `V == 3`, and `V` comes from the
+`(field 261)` opcode: the engine walks the player and returns the number of the event they
+stepped on. The event number is recorded RIGHT IN THE MAP -- `state.floormap()` parses cells
+and hands back an `event` field on each. So the target room doesn't need a walk to find; it
+can just be read.
 
-    emu/.venv/bin/python emu/findevent.py <образ.hdi>
+    emu/.venv/bin/python emu/findevent.py <image.hdi>
 """
 import os
 import pathlib
@@ -82,21 +83,21 @@ with sess:
     run(600)
     ok, _ = boot.drive(press, run, frame, log=lambda m: None)
     st = S.identify(snap())
-    print(f'сцена={st["scene"]}  стек={st.get("stack")}')
-    # ⚠️ Один шаг ПОСЛЕ загрузки: сразу после неё позиция и карта ещё не те, что в игре.
+    print(f'scene={st["scene"]}  stack={st.get("stack")}')
+    # ⚠️ One step AFTER loading: right after it, position and map still aren't the game's real ones.
     press('up')
     sn = snap()
-    print(f'позиция={S.where(sn)}')
+    print(f'position={S.where(sn)}')
     fm = S.floormap(sn)
     if not fm:
-        sys.exit('карта не найдена в памяти')
-    print(f'карта: {fm["w"]}x{fm["h"]} по адресу 0x{fm["addr"]:x}, подпись {fm["sig"]}')
+        sys.exit('map not found in memory')
+    print(f'map: {fm["w"]}x{fm["h"]} at address 0x{fm["addr"]:x}, signature {fm["sig"]}')
     ev = {}
     for (x, y), c in fm['cells'].items():
         if c['event']:
             ev.setdefault(c['event'], []).append((x, y, c['flag']))
-    print(f'\nклеток с событием: {sum(len(v) for v in ev.values())}')
+    print(f'\ncells with an event: {sum(len(v) for v in ev.values())}')
     for k in sorted(ev):
         cells = ', '.join(f'({x},{y}) flag={f}' for x, y, f in sorted(ev[k]))
-        mark = '   <<< ЭТА' if k == 3 else ''
-        print(f'  событие {k:3d}: {cells}{mark}')
+        mark = 'THIS' if k == 3 else ''
+        print(f'  event {k:3d}: {cells}{mark}')

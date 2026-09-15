@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Реплика с экрана -> её место в исходнике: файл, строка, сама форма.
+"""Line from screen -> its location in source: file, line, the form itself.
 
-Зачем. Чтобы попросить «вот эту фразу переформулировать», нужно однозначно назвать место.
-Пересказ на слух не годится: одна и та же фраза встречается в разных файлах и под разными
-условиями. Здесь экранный текст сводится к ключу и ищется по всем `en/*.MES.rkt`.
+Why. To request "rephrase this exact line", you need to name the location unambiguously.
+A verbal description won't do: the same phrase appears in different files and under different
+conditions. Here the on-screen text is reduced to a key and searched across all `en/*.MES.rkt`.
 
-Ключ -- текст реплики, каким его нарисует игра (`tools/render.py`, тот же симулятор, что
-сверен с кадром), с подстановкой имени, заменённой на \\x01. На экране вместо \\x01 стоит
-настоящее имя, поэтому при поиске имена героев подставляются обратно.
+The key is the line text as the game will render it (`tools/render.py`, the same simulator
+that was verified against a frame), with the name substitution replaced by \\x01. On screen,
+the real name stands in for \\x01, so during search the character names are substituted back in.
 
-Указатель кладётся в `text_index.json` и пересобирается, если хоть один `en/*.MES.rkt`
-новее указателя.
+The index is stored in `text_index.json` and rebuilt if any `en/*.MES.rkt`
+is newer than the index.
 """
 import json
 import pathlib
@@ -64,7 +64,7 @@ def index():
 
 
 def locate(lines, names=("Astral", "Pollux"), idx=None):
-    """Строки с экрана -> {'file','line','form'} или None."""
+    """Lines from the screen -> {'file','line','form'} or None."""
     idx = index() if idx is None else idx
     k = _key(" ".join(lines))
     for n in sorted(names, key=len, reverse=True):
@@ -73,9 +73,9 @@ def locate(lines, names=("Astral", "Pollux"), idx=None):
     hit = idx.get(k)
     if hit:
         return {"file": hit[0], "line": hit[1], "form": hit[2], "exact": True}
-    # ⚠️ Часть реплик игра собирает из кусков: имя печатает один опкод, хвост -- другой
-    # (`SENTO00.MES`: `(define-proc 43 (<> (text " were injured!!")))`). Целиком такой
-    # строки в исходнике нет, поэтому ищем самый длинный кусок, который в неё уложился.
+    # ⚠️ Some lines are assembled by the game from pieces: the name is printed by one opcode, the tail by another
+    # (`SENTO00.MES`: `(define-proc 43 (<> (text " were injured!!")))`). Exactly like this
+    # the string isn't in the source, so we find the longest chunk that fit within it.
     bare = k.replace(MARK, " ")
     best = None
     for key, v in idx.items():
@@ -92,7 +92,7 @@ if __name__ == "__main__":
     from PIL import Image
     import textbox
     i = index()
-    print(f"реплик в указателе: {len(i)}")
+    print(f"lines in the index: {len(i)}")
     for p in sys.argv[1:] or [str(HERE / "live.png")]:
         ls = textbox.lines(Image.open(p).convert("RGB"))
         print(f"--- {p}")

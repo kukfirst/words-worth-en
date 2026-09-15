@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Собрать QA-образ: переведено всё, что движок переживает; остальное остаётся японским.
+"""Build a QA image: everything the engine survives is translated; the rest stays Japanese.
 
-Зачем отдельно от `patch_hdi.sh`. Тот заливает ВСЕ переведённые .mes, включая те, что
-за порогом буфера, — и игра умирает при заходе в такую локацию, а до того ещё и молча
-затирает блок характеристик игрока (обмер: `emu/size_ladder.py`, `emu/HANDOFF.md`).
-Для задачи «сделать игру максимально проходимой для тестирования» это худший из вариантов:
-теряется не одна комната, а весь прогон.
+Why separate from `patch_hdi.sh`. That script dumps ALL translated .mes files, including those
+over the buffer threshold — and the game dies when entering such a location, and before that it also
+silently overwrites the player stats block (measured in: `emu/size_ladder.py`, `emu/HANDOFF.md`).
+For the task of "making the game as passable as possible for testing" this is the worst option:
+you lose not one room but the entire run.
 
-Здесь решение принимает ОДИН источник истины — `gates.gate_size`. Файл под порогом едет в
-образ переведённым, файл за порогом не едет вовсе, и на образе остаётся оригинал из
-чистого базового образа (`gates.BASE`). Никаких списков имён в коде: поменяется порог или ужмётся
-файл — сборка сама это подхватит.
+Here the decision is made by ONE source of truth — `gates.gate_size`. A file under the threshold
+goes into the image translated, a file over the threshold goes in not at all, and the image keeps the
+original from the clean base image (`gates.BASE`). No name lists in code: if the threshold changes
+or a file shrinks — the build picks it up on its own.
 
-⚠️ Японская комната — это не «текст проверен». `state.identify()` показывает такие сцены
-с суффиксом `:ja`, так что отчёт агента их отличает.
+⚠️ A Japanese room is not "text verified". `state.identify()` shows such scenes
+with the `:ja` suffix, so the agent report distinguishes them.
 """
 import pathlib, shutil, subprocess, sys, os, tempfile
 
@@ -22,14 +22,14 @@ sys.path.insert(0, str(ROOT / 'tools'))
 import gates                                                        # noqa: E402
 import hdimage                                                      # noqa: E402
 
-# ⚠️ Имена героев живут в СОХРАНЕНИИ, а не в скриптах. Правило и кодировка -- в
-# `tools/savenames.py`: один источник, потому что `build_play.py` переписывает те же
-# два поля в СВОЁМ слоте игрока, чтобы пересборка не убивала прогресс.
+# ⚠️ Hero names live in SAVE, not in scripts. The rule and encoding -- in
+# `tools/savenames.py`: single source of truth, because `build_play.py` overwrites the same ones
+# Two fields in the player's OWN slot, so a rebuild doesn't kill progress.
 from savenames import latinise, NAME_SLOTS                                   # noqa: E402
 
 
 def latinise_names(dst, offset, mtoolsrc_env):
-    """Переписать имена в пяти слотах сохранения латиницей."""
+    """Rewrite the names in the five save slots in Latin script."""
     done = []
     for slot in range(5):
         name = f"FLAG{slot}"
@@ -49,20 +49,20 @@ def latinise_names(dst, offset, mtoolsrc_env):
     return done
 
 
-SRC = gates.BASE                            # нетронутый оригинал (gates.BASE)
-# Куда собирать. По умолчанию -- образ, который грузит эмулятор; аргументом можно
-# собрать рядом, не трогая работающий агент (переписывать .hdi под открытым
-# эмулятором нельзя).
+SRC = gates.BASE                            # pristine original (gates.BASE)
+# Where to build. By default — the image the emulator loads; as an argument you can
+# build alongside, without touching the running agent (overwriting .hdi under an open
+# cannot be done with an emulator).
 DST = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / 'game/WordsWorth_qa.hdi'
 
 if not SRC.is_file():
-    sys.exit(f'нет {SRC}')
+    sys.exit(f'missing {SRC}')
 shutil.copyfile(SRC, DST)
 
 rc = os.environ.copy()
 cfg = pathlib.Path(tempfile.mkstemp(suffix='.mtoolsrc')[1])
-# ⚠️ Смещение раздела ИЩЕТСЯ, а не помнится -- как в apply_patch.py: 71680 это адрес
-# раздела нашего образа, у чужого он другой, и mtools там молча не находит ничего.
+# ⚠️ Section offset IS SEARCHED, not stored -- as in apply_patch.py: 71680 is an address
+# of our image — in someone else's it's different, and mtools silently finds nothing there.
 OFFSET = hdimage.mtoolsrc(DST, cfg)
 rc['MTOOLSRC'] = str(cfg); rc['MTOOLS_SKIP_CHECK'] = '1'
 
@@ -76,8 +76,8 @@ for f in sorted((ROOT / 'en').glob('*.MES.rkt.mes')):
     subprocess.run(['mcopy', '-o', str(f), f'z:/WW/{name}'], env=rc, check=True,
                    capture_output=True)
     sent.append(name)
-# Картинки с японскими надписями: перерисовываются каждый раз ЗАНОВО из нетронутого
-# оригинала (tools/titlemenu.py), а не берутся готовыми -- источник правды один, инструмент.
+# Images with Japanese text: redrawn every time FROM SCRATCH from the untouched original
+# of the original (tools/titlemenu.py), not taken ready-made -- the single source of truth is the tool.
 import titlemenu                                                    # noqa: E402
 art = [titlemenu.build()]
 for f in art:
@@ -87,11 +87,11 @@ renamed = latinise_names(DST, OFFSET, rc)
 cfg.unlink(missing_ok=True)
 
 for name, size in sorted(held, key=lambda x: -x[1]):
-    print(f'  🇯🇵 оставлен японским: {name:16s} {size:6d} б  '
-          f'(за порогом на {size - gates.MES_MAX} б)')
+    print(f'  🇯🇵 left Japanese: {name:16s} {size:6d} b  '
+          f'(over threshold by {size - gates.MES_MAX} b)')
 print(f'\n{DST}')
-print(f'картинок перерисовано: {len(art)} ({", ".join(f.name for f in art)})')
-print(f'переведённых залито: {len(sent)} · оставлено японскими: {len(held)} · '
-      f'порог {gates.MES_MAX} б')
-print(f'имена латиницей в сохранениях: {", ".join(renamed) or "уже были"} '
+print(f'images redrawn: {len(art)} ({", ".join(f.name for f in art)})')
+print(f'translated copied in: {len(sent)} · left Japanese: {len(held)} · '
+      f'threshold {gates.MES_MAX} b')
+print(f'names romanized in saves: {", ".join(renamed) or "already existed"} '
       f'({", ".join(NAME_SLOTS.values())})')

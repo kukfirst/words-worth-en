@@ -1,30 +1,31 @@
 #!/usr/bin/env python3
-"""Перевести русские комментарии и docstring'и на английский — не трогая код.
+"""Translate Russian comments and docstrings into English -- without touching the code.
 
-Публичный репозиторий раздаётся людям, которые по-русски не читают, а весь смысл наших
-инструментов записан именно в комментариях: почему порог такой, почему список считается, а
-не пишется, на чём погорели прошлый раз. Без перевода публикуется код без объяснений.
+The public repository goes out to people who don't read Russian, and the whole point of our
+tools lives in the comments: why the threshold is what it is, why a list is computed rather
+than written by hand, what burned us last time. Without translation, the code ships with no
+explanations.
 
-## Почему это не «прогнать файл через модель»
+## Why this isn't "run the file through the model"
 
-Модель, переписывающая .py целиком, однажды переставит аргумент или съест отрицание, и это
-не заметят: диффы тут на сотни строк. Поэтому меняются **только значения токенов COMMENT и
-строковых литералов-документаций**, а доказательство — пересличение:
+A model rewriting a whole .py file will, sooner or later, swap an argument or eat a negation,
+and it will go unnoticed: diffs here run hundreds of lines. So only the values of COMMENT
+tokens and docstring string literals **change**, and the proof is a re-tokenization:
 
-| проверка | что ловит |
+| check | what it catches |
 |---|---|
-| поток токенов | изменившийся тип или число токенов — то есть тронутый код |
-| позиции | правку токена, которого не выбирали |
-| компиляция | синтаксис, сломанный кавычкой или скобкой внутри комментария |
-| кириллица | недопереведённый кусок |
-| маркеры | съеденные `⚠️`, ссылки, имена файлов и чисел — их модель любит терять |
+| token stream | a changed token type or count -- i.e. touched code |
+| positions | an edit to a token that wasn't selected |
+| compilation | syntax broken by a quote or bracket inside a comment |
+| Cyrillic | an untranslated chunk |
+| markers | an eaten `⚠️`, link, filename, or number -- the model loves to drop these |
 
-⚠️ Ничего не пишет без `--apply`. Файл, у которого не сошлась хоть одна проверка, не пишется
-ЦЕЛИКОМ — половина переведённого файла хуже непереведённого.
+⚠️ Writes nothing without `--apply`. A file where even one check fails to match is not written
+AT ALL -- half a translated file is worse than an untranslated one.
 
-    tools/comments_en.py                 # что найдено и что изменится
-    tools/comments_en.py --apply         # записать
-    tools/comments_en.py tools/gates.py  # один файл
+    tools/comments_en.py                 # what's found and what will change
+    tools/comments_en.py --apply         # write
+    tools/comments_en.py tools/gates.py  # one file
 """
 import argparse
 import io
@@ -38,7 +39,7 @@ sys.path.insert(0, str(ROOT / 'tools'))
 import llm                                                          # noqa: E402
 
 CYR = re.compile(r'[А-Яа-яЁё]')
-# Куски, которые обязаны пережить перевод дословно: без них комментарий теряет адрес.
+# Chunks that must survive translation verbatim: without them a comment loses its address.
 KEEP = re.compile(r'⚠️|§\d+|`[^`]+`|\b\d[\d_ ]*\b|[A-Za-z_][A-Za-z0-9_]*\.(?:py|rkt|mes|json|md)\b')
 
 PROMPT = """You translate Russian source-code comments into English.
@@ -54,36 +55,41 @@ Rules:
 
 
 def chunks(src):
-    """Спаны токенов, которые нам можно менять: комментарии и строки-документации."""
+    """Token spans we're allowed to change: comments and docstring strings."""
     out = []
     toks = list(tokenize.generate_tokens(io.StringIO(src).readline))
     for i, t in enumerate(toks):
         if t.type == tokenize.COMMENT:
             out.append(t)
         elif t.type == tokenize.STRING:
-            # docstring -- строка, стоящая одна, как целая инструкция
+            # docstring -- a string standing alone, as a whole statement
             prev = next((p for p in reversed(toks[:i])
                          if p.type not in (tokenize.NL, tokenize.NEWLINE,
                                            tokenize.INDENT, tokenize.DEDENT)), None)
+            # A module docstring follows the shebang COMMENT, not a NEWLINE: leaving
+            # COMMENT out of this list meant every file's main description was skipped
+            # while its inline comments were translated. Caught by reading emu/visit.py
+            # after a successful run -- the check was the file itself, not the log.
             if prev is None or prev.type in (tokenize.NEWLINE, tokenize.INDENT,
-                                             tokenize.DEDENT) or prev.string == ':':
+                                             tokenize.DEDENT, tokenize.COMMENT) \
+                    or prev.string == ':':
                 out.append(t)
     return [t for t in out if CYR.search(t.string)], toks
 
 
 def skeleton(toks):
-    """Скелет файла: типы всех токенов плюс значения тех, которые менять нельзя.
+    """File skeleton: the types of every token plus the values of the ones we must not change.
 
-    ⚠️ Позиции сюда НЕ входят намеренно. Первая версия сличала `start`/`end` и отвергала
-    любой перевод: английский текст другой длины, и колонки съезжают у всего, что справа.
-    Это ловило не порчу кода, а собственную арифметику.
+    ⚠️ Positions are deliberately NOT included here. The first version compared `start`/`end`
+    and rejected every translation: English text has a different length, and columns shift for
+    everything to the right. That caught its own arithmetic, not corrupted code.
     """
     return [(t.type, None) if t.type in (tokenize.COMMENT, tokenize.STRING)
             else (t.type, t.string) for t in toks]
 
 
 def replace(src, edits):
-    """Подставить новые значения по спанам. Идём с конца, чтобы не съехали координаты."""
+    """Substitute new values by span. Work from the end so coordinates don't shift."""
     lines = src.splitlines(keepends=True)
     for tok, new in sorted(edits, key=lambda e: e[0].start, reverse=True):
         (r1, c1), (r2, c2) = tok.start, tok.end
@@ -94,14 +100,14 @@ def replace(src, edits):
 
 
 def kept(before, after):
-    """Что из обязательного к сохранению потерялось."""
+    """What was lost from the must-keep set."""
     was = sorted(KEEP.findall(before))
     now = sorted(KEEP.findall(after))
     return [x for x in was if was.count(x) > now.count(x)]
 
 
 def translate(tok):
-    """Один токен -> английский. Возвращает None, если модель не справилась."""
+    """One token -> English. Returns None if the model failed."""
     body = tok.string
     out = llm.chat(PROMPT, body)
     if not out:
@@ -125,7 +131,7 @@ def do(path, apply):
     try:
         todo, toks = chunks(src)
     except tokenize.TokenError as e:
-        return f'{path}: не разбирается: {e}', 0
+        return f'{path}: does not parse: {e}', 0
     if not todo:
         return None, 0
 
@@ -133,11 +139,11 @@ def do(path, apply):
     for tok in todo:
         new = translate(tok)
         if new is None:
-            bad.append(f'строка {tok.start[0]}: модель не справилась')
+            bad.append(f'line {tok.start[0]}: model failed')
             continue
         lost = kept(tok.string, new)
         if lost:
-            bad.append(f'строка {tok.start[0]}: потеряно дословное {lost[:4]}')
+            bad.append(f'line {tok.start[0]}: lost verbatim {lost[:4]}')
             continue
         edits.append((tok, new))
 
@@ -145,18 +151,18 @@ def do(path, apply):
         return f'{path.name}: ' + '; '.join(bad[:3]), len(todo)
 
     out = replace(src, edits)
-    # ⚠️ Главное доказательство: скелет обязан совпасть. Если модель тронула код --
-    # изменится тип или число токенов, и это видно здесь, а не в ревью на 300 строк.
+    # ⚠️ Main proof: the skeleton must match. If the model touched the code --
+    # the token type or count will change, and it shows here, not in a 300-line review.
     try:
         new_toks = list(tokenize.generate_tokens(io.StringIO(out).readline))
     except tokenize.TokenError as e:
-        return f'{path.name}: после правки не разбирается: {e}', len(todo)
+        return f'{path.name}: does not parse after the edit: {e}', len(todo)
     if skeleton(toks) != skeleton(new_toks):
-        return f'{path.name}: СКЕЛЕТ РАЗОШЁЛСЯ — тронут код, файл не пишется', len(todo)
+        return f'{path.name}: SKELETON MISMATCH -- code was touched, file not written', len(todo)
     try:
         compile(out, str(path), 'exec')
     except SyntaxError as e:
-        return f'{path.name}: не компилируется: {e}', len(todo)
+        return f'{path.name}: does not compile: {e}', len(todo)
 
     if apply:
         path.write_text(out, encoding='utf-8')
@@ -168,15 +174,15 @@ def main(paths, apply):
     for p in paths:
         err, n = do(p, apply)
         if n:
-            mark = '❌' if err else ('записан' if apply else 'готов')
-            print(f'  {p.relative_to(ROOT)!s:32} блоков {n:4d}  {mark}', flush=True)
+            mark = '❌' if err else ('written' if apply else 'ready')
+            print(f'  {p.relative_to(ROOT)!s:32} blocks {n:4d}  {mark}', flush=True)
         if err:
             print(f'      {err}', flush=True)
             failed.append(p)
         total += n
-    print(f'\nблоков всего: {total}, файлов с отказом: {len(failed)}')
+    print(f'\ntotal blocks: {total}, files rejected: {len(failed)}')
     if not apply:
-        print('НЕ ЗАПИСАНО. Применить: tools/comments_en.py --apply')
+        print('NOT WRITTEN. Apply: tools/comments_en.py --apply')
     return 1 if failed else 0
 
 

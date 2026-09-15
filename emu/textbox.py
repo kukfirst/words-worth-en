@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""Что НАПИСАНО в окне сообщения -- знак в знак, из кадра, без модели.
+"""What's WRITTEN in the message window -- glyph for glyph, from the frame, no model.
 
-Сетка жёсткая, шрифт растровый, поэтому чтение -- сравнение битовых карт, а не
-распознавание: либо знакоместо совпало с эталоном ровно, либо это не буква.
+The grid is fixed, the font is a raster, so reading is bitmap comparison, not recognition:
+either a cell matches a template exactly, or it isn't a letter.
 
-⚠️ Шрифт у игры СВОЙ. В ПЗУ PC-98 (`system/np2kai/font.rom`), в `font.bmp` эмулятора и в
-самом образе диска растра буквы «A» из окна сообщения НЕТ -- искал прямым растром,
-полушириной и OR-сжатием полноширинных 16x16. Поэтому эталоны выведены из кадров:
-`emu/learn_font.py` решает подстановочный шифр по всему английскому тексту игры и
-кладёт таблицу в `textbox_glyphs.json`.
+⚠️ The game has its OWN font. The letter "A" raster from the message window is nowhere: not
+in the PC-98 ROM (`system/np2kai/font.rom`), not in the emulator's `font.bmp`, not in the
+disk image itself -- searched by direct raster, half-width, and OR-compression of full-width
+16x16. So templates are derived from frames: `emu/learn_font.py` solves a substitution
+cipher over all of the game's English text and drops the table into `textbox_glyphs.json`.
 
-⚠️ Текст сообщения НЕ лежит в текстовом слое PC-98. `emu/screen_text.py` читал 0xA0000
-из снимка состояния и на всех шести сохранённых снимках выдавал одно и то же месиво --
-по этому смещению в снимке libretro лежит не текстовый слой.
+⚠️ The message text does NOT live in the PC-98 text layer. `emu/screen_text.py` read 0xA0000
+out of a state snapshot and produced the same garbage on all six saved snapshots -- that
+offset in a libretro snapshot isn't the text layer.
 
-Геометрия снята с кадра `findings/0022.png` («Astral were injured!!»):
-  левый верх первого знакоместа (96, 312), шаг 8x16, 56 колонок, 4 строки.
-  56*8 = 448 -> правый край 544, чёрный прямоугольник окна кончается на 543. Сходится.
+Geometry taken from frame `findings/0022.png` ("Astral were injured!!"):
+  top-left of the first cell (96, 312), step 8x16, 56 columns, 4 rows.
+  56*8 = 448 -> right edge 544, the window's black rectangle ends at 543. Checks out.
 """
 import functools
 import json
@@ -28,10 +28,10 @@ from PIL import Image
 HERE = pathlib.Path(__file__).resolve().parent
 STORE = HERE / "textbox_glyphs.json"
 
-X0, Y0 = 96, 312          # левый верх первого знакоместа
-CW, CH = 8, 16            # знакоместо
-COLS, ROWS = 56, 4        # окно сообщения
-INK = 230                 # порог «горит» -- знак рисуется цветом (248,252,248)
+X0, Y0 = 96, 312          # Top-left of the first character cell
+CW, CH = 8, 16            # character slot
+COLS, ROWS = 56, 4        # message window
+INK = 230                 # threshold is "hot" -- marker is drawn with color (248,252,248)
 UNKNOWN = "�"
 
 
@@ -51,7 +51,7 @@ def _ink(frame):
 
 
 def cells(frame):
-    """Знакоместа окна слева направо, сверху вниз. None -- пустое."""
+    """Window layout from left to right, top to bottom. None -- empty."""
     ink = _ink(frame)
     out = []
     for r in range(ROWS):
@@ -62,7 +62,7 @@ def cells(frame):
 
 
 def lines(frame):
-    """Строки окна сообщения как они написаны. Нераспознанное знакоместо -- '\\uFFFD'."""
+    """Message window lines as written. Unrecognized character is '\\uFFFD'."""
     tpl = templates()
     cs = cells(frame)
     out = []
@@ -75,7 +75,7 @@ def lines(frame):
 
 
 def text(frame):
-    """Реплика одной строкой: перенос окна убран, как её читает человек."""
+    """One-liner replica: the window shift is removed, as a person reads it."""
     return " ".join(l.strip() for l in lines(frame) if l.strip())
 
 

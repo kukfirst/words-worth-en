@@ -1,17 +1,19 @@
-"""Снять набор кадров с ГОТОВОГО образа: загрузка, титульное меню, лавка, бой.
+"""Grab a set of frames off a FINISHED image: boot, title menu, shop, battle.
 
-Зачем отдельно от зонда. `battle_probe.py` судит, жив ли образ, и снимает что попало по пути.
-Для витрины нужны РАЗНЫЕ экраны с английским текстом, и снятые именно с того образа, который
-уедет людям, -- иначе на картинке окажется текст прошлой сборки.
+Why separate from the probe. `battle_probe.py` judges whether an image is alive and grabs
+whatever falls out along the way. The showcase needs DIFFERENT screens with English text,
+and captured from exactly the image that ships to people -- otherwise the picture ends up
+showing text from a previous build.
 
-Что делает: холодный старт по рецепту `boot.RECIPE` с кадром после каждого шага, затем
-маршрут `FLOOR05 -> SHP_5I` (лавка -- там живёт починенный вопрос о покупке), затем прогулка
-до случайной встречи с кадром на каждое нажатие.
+What it does: cold start following the `boot.RECIPE` recipe with a frame after each step,
+then the `FLOOR05 -> SHP_5I` route (the shop -- home to the fixed purchase question), then a
+walk to a random encounter with a frame on every keypress.
 
-⚠️ По ОДНОМУ за раз: ядро пишет в системный каталог, а образ и кадры лежат в tmpfs рядом с
-моделью. `WW_SYSTEM` даёт свою копию системного каталога, чтобы не задеть работающего агента.
+⚠️ ONE AT A TIME: the core writes into the system directory, while the image and frames sit
+in tmpfs next to the model. `WW_SYSTEM` provides its own copy of the system directory so a
+running agent isn't disturbed.
 
-    emu/.venv/bin/python emu/shotset.py <образ.hdi> <куда>
+    emu/.venv/bin/python emu/shotset.py <image.hdi> <destination>
 """
 import os
 import pathlib
@@ -88,7 +90,7 @@ shots = []
 
 
 def snap_png(name):
-    """Кадр на диск + прочитанный с него текст окна -- чтобы выбирать по СОДЕРЖАНИЮ."""
+    """Frame to disk + the window text read off it -- so shots can be picked by CONTENT."""
     f = frame()
     if f is None:
         return
@@ -111,67 +113,70 @@ def scene():
 
 
 with sess:
-    print('== холодный старт')
+    print('== cold start')
     run(600)
-    # рецепт boot.RECIPE, но с кадром после каждого шага
+    # boot.RECIPE, but with a frame after every step
     for label, key, then, _must in boot.RECIPE:
         if key is None:
             run(then)
         else:
             press(key, 8, then)
         snap_png(label.replace(': ', '_').replace(' ', '-').replace('/', '-'))
-    print(f'  сцена после загрузки: {scene()}')
+    print(f'  scene after boot: {scene()}')
 
-    # ⚠️ Новая игра начинается в КОМНАТЕ ГЕРОЯ (CAMP.MES), а маршрут в лавку записан от
-    # коридора (FLOOR05.MES). Без первого звена второе не начинается, и зонд сорок шагов
-    # топчется в комнате, докладывая «встречи не случилось».
-    print('== в коридор и в лавку')
-    # ⚠️ Маршрут, который не подходит к ТЕКУЩЕЙ сцене, -- не провал цепочки, а просто не
-    # его очередь: после загрузки игра оказывается то в комнате героя, то уже в коридоре.
-    # Раньше первое же «wrong place» обрывало путь, и лавка не снималась ни разу.
+    # ⚠️ A new game starts in the HERO'S ROOM (CAMP.MES), while the route to the shop is
+    # recorded from the corridor (FLOOR05.MES). Without the first leg the second never
+    # starts, and the probe spends forty steps pacing the room, reporting "no meeting took
+    # place".
+    print('== to the corridor and the shop')
+    # ⚠️ A route that doesn't match the CURRENT scene isn't a chain failure -- it's just not
+    # its turn yet: after boot the game lands either in the hero's room or already in the
+    # corridor. Previously the first "wrong place" would abort the path, and the shop was
+    # never captured once.
     all_routes = {x['name']: x for x in routes.load_all()}
     ok = False
-    # ⚠️ Маршрут `FLOOR05 -> SHP_5I` отсюда НЕ ходит: сцена совпадает по имени, а точка старта
-    # другая -- новая игра начинается в комнате героя, маршрут записан из коридора. Проверка
-    # места по имени сцены этого не ловит, поэтому четырнадцать нажатий уводили героя в угол,
-    # и прогулка после них не находила ни одной встречи (два прогона подряд). Не зовём.
+    # ⚠️ The `FLOOR05 -> SHP_5I` route does NOT walk from here: the scene matches by name,
+    # but the starting point differs -- a new game starts in the hero's room, and the route
+    # is recorded starting from the corridor. Checking location by scene name doesn't catch
+    # that, so fourteen presses walked the hero into a corner, and the walk that followed
+    # found no encounter at all (two runs in a row). Not calling it.
     for name in ('CAMP.MES--to--FLOOR05.MES',):
         r = all_routes.get(name)
         if r is None:
-            print(f'  нет маршрута {name}')
+            print(f'  no route {name}')
             continue
         ok, why = routes.replay(r, press, run, scene)
         print(f'  {name}: {ok} -- {why}')
         snap_png('route-' + name.split('--to--')[1].split('.')[0])
     if ok:
-        # прилавок: подтвердить приветствие, войти в «Buy», пройти по списку предметов.
-        # Ключи не угаданы: `space` -- подтверждение, `down` -- ход по списку. Кадр снимаем
-        # на КАЖДОЕ нажатие, а нужные потом выбираются по прочитанному тексту.
+        # counter: confirm the greeting, enter "Buy", walk the item list. Keys were not
+        # guessed: `space` confirms, `down` moves through the list. A frame is captured on
+        # EVERY press, and the ones we want get picked afterward by the text they show.
         for i, k in enumerate(['space'] * 3 + ['space', 'down', 'space',
                                               'space', 'down', 'down', 'space'] * 2):
             press(k)
             snap_png(f'shop-{i:02d}-{k}')
 
-    print('== прогулка до встречи')
+    print('See you later')
     walk = ['up'] * 6 + ['right'] + ['up'] * 6 + ['left']
     for i in range(90):
         press(walk[i % len(walk)])
         sc = scene()
         if 'SENTO' in sc:
-            print(f'  бой на шаге {i}: {sc}')
+            print(f'  battle at step {i}: {sc}')
             for k in range(14):
                 press('space')
                 snap_png(f'fight-{k:02d}')
             break
     else:
-        print('  встречи не случилось')
+        print('no meeting took place')
         snap_png('walk-end')
 
-    # меню предметов: Escape в этой игре открывает именно его (см. STATUS §24б)
-    print('== меню предметов')
+    # items menu: Escape in this game opens exactly that (see STATUS §24b)
+    print('== items menu')
     press('escape')
     snap_png('items-menu')
     press('down')
     snap_png('items-menu-2')
 
-print(f'\nснято кадров: {len(shots)} -> {out}')
+print(f'\nframes captured: {len(shots)} -> {out}')

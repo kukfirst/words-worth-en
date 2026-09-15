@@ -1,37 +1,37 @@
 #!/usr/bin/env python3
-"""Вычитка перевода: пройтись по английскому тексту ещё раз, уже без японского перед глазами.
+"""Proofread the translation: pass over the English text once more, now without Japanese in view.
 
-Первый проход переводил японское в английское и судился по верности оригиналу. Вычитка --
-другая задача: японского здесь нет вовсе, и спрашивается только одно -- «так говорят
-по-английски?». Буквальный порядок слов, сбитый артикль, мёртвая идиома, разнобой в
-обращениях -- всё то, на что справедливо указал корректор gbatemp.
+The first pass translated Japanese into English and was judged for fidelity to the original.
+Proofreading is a different job: there is no Japanese here at all, and the only question is
+"does this read like English?" Literal word order, a dropped article, a dead idiom, inconsistent
+forms of address -- exactly what the gbatemp proofreader rightly flagged.
 
-## Куда пишется результат
+## Where the result is written
 
-НЕ в `en/*.rkt`. Правки ложатся обратно в `text/*.json`, то есть в тот же плоский вид, что
-уходит человеку, и дальше идут общим путём: `tools/import_text.py` со всеми его гейтами и
-правилом «не прошла одна строка -- не пишется ничего». Двух дорог в скрипты быть не должно.
+NOT to `en/*.rkt`. Edits go back into `text/*.json`, i.e. the same flat form that goes out to
+a human, and from there follow the usual path: `tools/import_text.py` with all its gates and the
+rule "one failed line means nothing is written." There must not be two roads into the scripts.
 
-Значит вычитку можно посмотреть глазами до того, как она куда-то поедет:
+So a proofreading pass can be reviewed by eye before it goes anywhere:
 
-    tools/proofread.py                  # прогнать и записать предложения в text/
-    tools/proofread.py FLOOR02.MES      # один файл
-    git diff --stat                     # (text/ под gitignore -- смотреть через --review)
-    tools/proofread.py --review         # показать все принятые правки построчно
-    tools/import_text.py                # что из этого пройдёт гейты
-    tools/import_text.py --apply        # записать в скрипты
+    tools/proofread.py                  # run and write sentences into text/
+    tools/proofread.py FLOOR02.MES      # one file
+    git diff --stat                     # (text/ is gitignored -- view via --review)
+    tools/proofread.py --review         # show every accepted edit line by line
+    tools/import_text.py                # see what passes the gates
+    tools/import_text.py --apply        # write into the scripts
 
-## Что отвергается на месте, не доходя до import_text
+## What gets rejected on the spot, before reaching import_text
 
-| проверка | почему здесь, а не потом |
+| check | why here, not later |
 |---|---|
-| маркеры `{0}` | дешевле не предлагать, чем потом разбирать отказ на 200 строк |
-| кодировка | то же |
-| раскладка в окне | вычитка норовит удлинить фразу; окно 56 знаков этого не прощает |
-| длина | реплика не должна занять БОЛЬШЕ экранных строк, чем занимала: файл растёт |
-| «правка ради правки» | замена, не меняющая смысла (регистр, точка), только тратит размер |
+| `{0}` markers | cheaper not to propose than to untangle a 200-line rejection later |
+| encoding | same |
+| window layout | proofreading tends to lengthen a line; a 56-char window doesn't forgive that |
+| length | a line must not take MORE screen lines than it did before: the file grows |
+| "edit for its own sake" | a change that doesn't alter meaning (case, a period) only spends budget |
 
-⚠️ Модель здесь ничего не решает. Она предлагает; принимает код.
+⚠️ The model decides nothing here. It proposes; the code accepts.
 """
 import argparse
 import json
@@ -47,7 +47,7 @@ import llm                                                          # noqa: E402
 
 TEXT = ROOT / 'text'
 MARK = re.compile(r'\{(\d+)\}')
-# Подпись говорящего в начале реплики: `[Kaiser]: `, `[{0}]: `. Меняться не имеет права.
+# Speaker tag at the start of a line: `[Kaiser]: `, `[{0}]: `. Must never change.
 SPEAKER = re.compile(r'^\s*\[[^\]]*\]:\s*')
 BATCH = 25
 
@@ -84,61 +84,63 @@ answers are small; {} is a perfectly good answer. No commentary."""
 
 
 def wrong(old, new, c0):
-    """Причина отказать предложению. Пусто -- значит берём.
+    """Reason to reject the proposal. Empty means we take it.
 
-    ⚠️ Запрета «не длиннее ни на знак» здесь НЕТ, и это исправление. Он стоял в первой
-    версии и отверг бы настоящую починку: `took out some Light Clan` -> `took out a few
-    Light Clan guys` -- фраза, которой не хватало существительного, лечится только
-    прибавлением слова. Ограничение на самом деле не на реплику, а на ФАЙЛ: он не должен
-    уехать за `gates.MES_MAX`. Поэтому здесь -- число экранных строк (окно есть окно), а
-    рост считается бюджетом на файл (`budget`), и последнее слово всё равно за размерным
-    гейтом `import_text.py`, который теперь отказывает ДО записи.
+    ⚠️ There is NO "not a single character longer" rule here, and that's a fix. It stood in the
+    first version and would have rejected a genuine repair: `took out some Light Clan` ->
+    `took out a few Light Clan guys` -- a phrase missing a noun can only be fixed by adding a
+    word. The real limit isn't on the line, it's on the FILE: it must not cross `gates.MES_MAX`.
+    So here it's the number of screen lines (a window is a window), growth is tracked against a
+    per-file budget (`budget`), and the final word still belongs to the size gate in
+    `import_text.py`, which now refuses BEFORE writing.
     """
     if new == old:
-        return 'без изменений'
+        return 'unchanged'
     if MARK.findall(old) != MARK.findall(new):
-        return f'маркеры {MARK.findall(old)} -> {MARK.findall(new)}'
-    # ⚠️ Маркер В НАЧАЛЕ (или в конце) формы -- не украшение, а место склейки: движок
-    # печатает имя ДО текста формы, и перенести `{0}` внутрь фразы физически нельзя.
-    # Замер: вычитка предложила `{0} to. I'll write.` -> `I'll write in {0}.`, и это
-    # единственная правка из 368, которую отверг импорт (`не раскладывается по слотам`).
-    # Дешевле не предлагать, чем ронять весь импорт: он всё-или-ничего.
+        return f'markers {MARK.findall(old)} -> {MARK.findall(new)}'
+    # ⚠️ A marker AT THE START (or the end) of a form isn't decoration, it's the splice point:
+    # the engine prints the name BEFORE the form's text, and `{0}` physically cannot move
+    # inside the phrase. Measured case: proofreading proposed `{0} to. I'll write.` -> `I'll
+    # write in {0}.`, and that's the one edit out of 368 that import rejected ("doesn't fit
+    # into the form's slots"). Cheaper not to propose it than to fail the whole import: it's
+    # all-or-nothing.
     for end in (True, False):
         o, n = (old.rstrip(), new.rstrip()) if end else (old.lstrip(), new.lstrip())
         om, nm = (MARK.search(o[-4:]), MARK.search(n[-4:])) if end else \
                  (MARK.match(o), MARK.match(n))
         if bool(om) != bool(nm):
-            return f'маркер на {"конце" if end else "краю"} формы съехал внутрь фразы'
-    # ⚠️ Подпись говорящего `[Kaiser]: ` -- обычный текст, не маркер, и первая версия её не
-    # стерегла. Замер 2026-09-15 на FLOOR05: из 16 принятых правок ПЯТЬ срезали подпись
-    # («[Kaiser]: Hey...» -> «Hey...»), а ещё одна дописала пробел в начало. Такое доехало
-    # бы до игры и молча убрало бы имена из реплик.
+            return f'marker at the {"end" if end else "edge"} of the form slid inside the phrase'
+    # ⚠️ The speaker tag `[Kaiser]: ` is plain text, not a marker, and the first version didn't
+    # guard it. Measured 2026-09-15 on FLOOR05: of 16 accepted edits, FIVE stripped the tag
+    # ("[Kaiser]: Hey..." -> "Hey...") and one more added a leading space. That would have
+    # shipped into the game and silently removed names from lines.
     o, n = SPEAKER.match(old), SPEAKER.match(new)
     if (o.group(0) if o else None) != (n.group(0) if n else None):
-        return f'подпись говорящего {o.group(0) if o else "нет"!r} -> {n.group(0) if n else "нет"!r}'
+        return f'speaker tag {o.group(0) if o else "none"!r} -> {n.group(0) if n else "none"!r}'
     if (len(old) - len(old.lstrip())) != (len(new) - len(new.lstrip())) or \
             old.rstrip() != old and new.rstrip() == new:
-        return 'изменился отступ или хвостовой пробел'
+        return 'leading or trailing whitespace changed'
     if gates.gate_charset([new]):
-        return 'знаки вне кодировки игры'
+        return 'characters outside game encoding'
     sc_old = screen(parts_of(old), w=None, col0=c0)
     sc_new = screen(parts_of(new), w=None, col0=c0)
     if len(sc_new) > len(sc_old):
-        return f'занимает {len(sc_new)} строк вместо {len(sc_old)}'
+        return f'takes {len(sc_new)} lines instead of {len(sc_old)}'
     why = flaws(sc_new, col0=c0)
     if why:
-        return 'раскладка: ' + ', '.join(sorted(set(why)))
+        return 'layout: ' + ', '.join(sorted(set(why)))
     if new.strip().lower() == old.strip().lower():
-        return 'правка ради правки'
+        return 'edit for its own sake'
     return ''
 
 
 def budget(name):
-    """Сколько знаков файлу можно прибавить, не подойдя к порогу.
+    """How many characters the file can gain without approaching the threshold.
 
-    Считать точно нельзя: `(dict-build)` строит словарь сжатия ИЗ текста, и связь «знак ->
-    байт» не линейна (правка букв в 40 репликах меняла 27,8 % байтов файла). Поэтому берём
-    заведомо скупо: треть запаса в байтах. Настоящая проверка -- пересборка в `import_text`.
+    It can't be computed exactly: `(dict-build)` builds the compression dictionary FROM the
+    text, and the "character -> byte" relationship isn't linear (editing letters in 40 lines
+    changed 27.8% of the file's bytes). So we deliberately lowball it: a third of the byte
+    headroom. The real check is the rebuild in `import_text`.
     """
     mes = ROOT / 'en' / f'{name}.rkt.mes'
     if not mes.exists():
@@ -154,29 +156,29 @@ def pass_file(jf, limit):
         if limit and took >= limit:
             break
         batch = rows[i:i + BATCH]
-        # ⚠️ Перенос ВНУТРИ реплики кодируется двумя знаками: иначе нумерованный список
-        # разъезжается на её же переносе, и модель отвечает не про ту строку.
+        # ⚠️ A line break INSIDE a line is encoded as two characters: otherwise the numbered
+        # list gets thrown off by its own line break, and the model answers about the wrong line.
         ask = '\n'.join(f'{n}. {r["en"]}'.replace('\n', '\\n') for n, r in enumerate(batch))
         try:
             out = json.loads(llm.chat(PROMPT, ask))
         except Exception as e:
-            refused.setdefault(f'модель: {type(e).__name__}', 0)
-            refused[f'модель: {type(e).__name__}'] += 1
+            refused.setdefault(f'model: {type(e).__name__}', 0)
+            refused[f'model: {type(e).__name__}'] += 1
             continue
         if not isinstance(out, dict):
-            refused['модель вернула не объект'] = refused.get('модель вернула не объект', 0) + 1
+            refused['model returned not an object'] = refused.get('model returned not an object', 0) + 1
             continue
         for k, new in out.items():
             if not isinstance(new, str) or not str(k).strip('.').isdigit():
                 continue
             n = int(str(k).strip('.'))
             if not 0 <= n < len(batch):
-                refused['номер вне батча'] = refused.get('номер вне батча', 0) + 1
+                refused['number outside batch'] = refused.get('number outside batch', 0) + 1
                 continue
             r = batch[n]
-            new = new.replace('\\n', '\n')      # обратно из двухзначной записи переноса
-            # колонка старта восстанавливается из выгрузки: первая экранная строка
-            # короче текста ровно на отступ, который движок уже напечатал
+            new = new.replace('\\n', '\n')      # back from the two-character line-break encoding
+            # start column is recovered from the export: the first screen line
+            # is shorter than the text by exactly the indent the engine already printed
             c0 = max(0, len(r['screen'][0]) - len(r['en'].split('\n')[0])) if r['screen'] else 0
             why = wrong(r['en'], new, c0)
             if why:
@@ -184,7 +186,7 @@ def pass_file(jf, limit):
                 continue
             grow = len(new) - len(r['en'])
             if grow > left:
-                refused['не хватает бюджета файла'] = refused.get('не хватает бюджета файла', 0) + 1
+                refused['not enough file budget'] = refused.get('not enough file budget', 0) + 1
                 continue
             left -= max(0, grow)
             r['en'] = new
@@ -197,29 +199,29 @@ def pass_file(jf, limit):
 
 def main(names, limit):
     if not TEXT.is_dir():
-        sys.exit(f'нет {TEXT} -- сперва tools/export_text.py')
+        sys.exit(f'no {TEXT} -- run tools/export_text.py first')
     files = [TEXT / f'{n}.json' for n in names] if names else sorted(TEXT.glob('*.MES.json'))
     total, all_ref = 0, {}
     for jf in files:
         if not jf.exists():
-            print(f'  {jf.name}: нет такого')
+            print(f'  {jf.name}: no such file')
             continue
         took, ref = pass_file(jf, limit)
         total += took
         for k, v in ref.items():
             all_ref[k] = all_ref.get(k, 0) + v
-        print(f'  {jf.name[:-5]:16} принято {took:4d}', flush=True)
-    print(f'\nпринято правок: {total}')
+        print(f'  {jf.name[:-5]:16} accepted {took:4d}', flush=True)
+    print(f'\naccepted edits: {total}')
     if all_ref:
-        print('отказано:')
+        print('rejected:')
         for k, v in sorted(all_ref.items(), key=lambda x: -x[1]):
             print(f'   {v:5d}  {k}')
-    print('\nдальше: tools/import_text.py (посмотреть), потом --apply')
+    print('\nnext: tools/import_text.py (preview), then --apply')
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('names', nargs='*')
-    ap.add_argument('--limit', type=int, default=0, help='правок на файл, 0 -- без предела')
+    ap.add_argument('--limit', type=int, default=0, help='edits per file, 0 = no limit')
     a = ap.parse_args()
     main(a.names, a.limit)

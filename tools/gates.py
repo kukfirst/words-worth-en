@@ -4,23 +4,25 @@ import os, re, subprocess, pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from strings import scan
 
-# ⚠️ juice НЕ вендорится: у него нет лицензии (проверено по API GitHub -- `license: None`),
-# то есть права на распространение нам никто не давал. Он клонируется в `tools/juice`
-# скриптом `tools/get_juice.sh` на закреплённом коммите. Путь ищется рядом с этим файлом,
-# а не в домашнем каталоге автора; переопределяется переменной `WW_JUICE`.
+# ⚠️ juice is NOT vendored: it has no license (checked via the GitHub API -- `license: None`),
+# so nobody gave us redistribution rights. It gets cloned into `tools/juice` by
+# `tools/get_juice.sh` at a pinned commit. The path is looked up next to this file,
+# not in the author's home directory; overridable via the `WW_JUICE` env var.
 JUICE = pathlib.Path(os.environ.get('WW_JUICE') or
                      pathlib.Path(__file__).resolve().parent / 'juice/mes/juice.rkt')
 
-# ⚠️ Базовый образ -- ОДНА точка на весь конвейер. Раньше путь был скопирован в шесть мест
-# (make_patch, build_qa_image, build_play, verify ×2, titlemenu), и это не гипотетический
-# вред: `game/WordsWorth.hdi` втихую разошёлся с образом, объявленным в README v1.0, на
-# 21 байт -- кто-то из прогонов записал в него слот. Против него и считались все `md5_before`.
+# ⚠️ The base image is ONE spot for the whole pipeline. The path used to be copied into six
+# places (make_patch, build_qa_image, build_play, verify x2, titlemenu), and that was not a
+# hypothetical risk: `game/WordsWorth.hdi` had quietly drifted 21 bytes from the image
+# declared in README v1.0 -- some run had written a save slot into it. All `md5_before`
+# checks were computed against it.
 #
-# С 2026-09-15 база -- дамп Neo Kobe (CRC32 8AE7E6F1): именно его люди скачивают, и на него
-# жаловались на gbatemp. Замер, на котором это решение стоит: из трёх наших образов (рабочий,
-# набор v1.0, Neo Kobe) все 906 файлов игры ПОБАЙТОВО ОДИНАКОВЫ, расходится только `FLAG0` --
-# слот сохранения. Поэтому смена базы не меняет ни одной дельты, а пофайловый патч ложится на
-# любой из трёх. Переопределяется `WW_BASE`.
+# Since 2026-09-15 the base is the Neo Kobe dump (CRC32 8AE7E6F1): that's the one people
+# actually download, and the one complained about on gbatemp. The measurement this decision
+# rests on: across our three images (working copy, v1.0 set, Neo Kobe), all 906 game files
+# are BYTE-IDENTICAL, the only divergence is `FLAG0` -- the save slot. So switching the base
+# changes no delta, and the per-file patch applies to any of the three. Overridable via
+# `WW_BASE`.
 BASE = pathlib.Path(os.environ.get('WW_BASE') or
                     pathlib.Path(__file__).resolve().parent.parent /
                     'game/base/WordsWorth_neokobe.hdi')
@@ -28,10 +30,10 @@ BASE = pathlib.Path(os.environ.get('WW_BASE') or
 # juice rather than assuming printable ASCII. Notably it has no backslash and no
 # tilde, and a stray "\" makes the compiled file unparseable (SENTO0A).
 _CHARSET = pathlib.Path(__file__).resolve().parent / 'juice/mes/charset/_charset_english.rkt'
-# ⚠️ Запасной вариант -- НЕ «печатный ASCII на глазок». У корректора juice не стоит и не
-# должен: вычитка -- это правка текста, а не сборка игры. Поэтому набор знаков заморожен в
-# `tools/charset_english.json` (208 знаков, снято из juice) и едет вместе с инструментами.
-# Без него проверка кодировки у корректора врала бы в обе стороны.
+# ⚠️ The fallback is NOT "printable ASCII, eyeballed". The proofreader doesn't have juice
+# installed and shouldn't: proofreading is editing text, not building the game. So the
+# character set is frozen into `tools/charset_english.json` (208 chars, taken from juice)
+# and ships with the tools. Without it the proofreader's charset check would lie both ways.
 try:
     ALLOWED = {ord(c) for c in re.findall(r'#\\(.)', _CHARSET.read_text(encoding='utf-8'))}
     ALLOWED |= {0x20}
@@ -120,11 +122,11 @@ _SKEL_STR = re.compile(r'"(?:[^"\\]|\\.)*"')
 # regex would bite off just its first line and leave the glyphs behind
 _SKEL_DROP = re.compile(r'^\s*\(meta\b.*?\)\s*$', re.M | re.S)
 _SKEL_FONT = re.compile(r'\(set-arr~ @ 21 (?:\([^()]*\)|[^()])*\)')
-# ⚠️ Слепое пятно по делу: английская сборка ставит бит 12 @20 перед каждым
-# (number …), иначе цифры рисуются половинками глифов (strings.number_fix).
-# Вырезаем ровно эти две записи, и С ОБЕИХ сторон — сравнение остаётся честным.
+# ⚠️ A blind spot, on purpose: the English build sets bit 12 @20 before every
+# (number …), otherwise digits draw as half-glyphs (strings.number_fix).
+# We cut exactly these two entries, on BOTH sides -- the comparison stays honest.
 def _drop_numfix(s):
-    """Вырезать записи @20 про бит 12 -- регуляркой не выйдет, там три уровня скобок."""
+    """Cut out the @20 bit-12 entries -- a regex can't do it, there are three paren levels."""
     out, i = [], 0
     while True:
         j = s.find('(set-arr~ @ 20', i)
@@ -138,13 +140,13 @@ def _drop_numfix(s):
             k += 1
         form = s[j:k+1]
         if '4095' in form or '4096' in form:
-            # съедаем пробел и слева тоже, иначе на месте вырезанной формы остаётся
-            # лишний разделитель и скелеты расходятся ровно на него
+            # eat the space on the left too, otherwise the cut form leaves a stray
+            # separator and the skeletons diverge by exactly that
             out.append(s[i:j].rstrip(' \n\t'))
             i = k + 1
             while i < len(s) and s[i] in ' \n\t':
                 i += 1
-            # разделитель нужен ровно там, где дальше идёт следующая инструкция, а не ')'
+            # a separator is needed exactly where the next instruction follows, not ')'
             if i < len(s) and s[i] != ')':
                 out.append(' ')
         else:
@@ -158,7 +160,7 @@ def skeleton(src: str) -> str:
     s = _SKEL_DROP.sub('', s)
     s = _SKEL_FONT.sub('(set-arr~ @ 21 *)', s)
     s = _drop_numfix(s)
-    s = re.sub(r'\s+', ' ', s).strip()   # переносы — не структура
+    s = re.sub(r'\s+', ' ', s).strip()   # line breaks are not structure
     # the dict differs between original and translation by design; drop it whole
     while True:
         m = re.search(r'\(dict(?:-build)?[\s)]', s)
@@ -206,39 +208,41 @@ def skeleton(src: str) -> str:
 
 
 
-# Измерено на FLOOR05.MES (emu/size_ladder.py, emu/bisect_crash.py): 40 092 б переживает
-# загрузку, 40 115 б убивает игру. Подтверждено дважды на непересекающихся наборах строк —
-# префиксами и суффиксами, — то есть дело в РАЗМЕРЕ, а не в конкретной строке.
-# START.MES (11 104 б) резидентен всегда и грузится по 0x95f0, сценарий сцены встаёт ровно за
-# ним по 0xC150 — база одна и та же у всех сценариев, поэтому потолок общий.
+# Measured on FLOOR05.MES (emu/size_ladder.py, emu/bisect_crash.py): 40,092 b survives
+# loading, 40,115 b kills the game. Confirmed twice on non-overlapping sets of lines --
+# by prefix and by suffix -- so it's about SIZE, not a specific line.
+# START.MES (11,104 b) is always resident and loads at 0x95f0, the scene script sits right
+# after it at 0xC150 -- the base is the same for every scene, so the ceiling is shared.
 #
-# ⚠️⚠️ ПОСЛЕДНЕЕ ПРЕДЛОЖЕНИЕ БЫЛО ДОПУЩЕНИЕМ, И ОНО НЕВЕРНО. «База одна и та же, ПОЭТОМУ
-# потолок общий» — это рассуждение, а не замер: мерили один файл с холодного старта. 2026-09-14
-# игрок получил выход в DOS на `FLOOR02` (38 032 б) — под старым порогом, гейт был зелёный.
-# Контроль: японский оригинал того же файла (35 707 б) живёт, наш нет; вызываемый `FLOOR02A`
-# ни при чём. Лестница по размеру на воспроизводимом вылете (`emu/threshold.py`):
-#     38 032 ❌   37 591 ✅   36 495 ✅   35 707 ✅
-# То есть у ЭТОЙ комнаты граница в 37 591…38 032, на две с лишним тысячи ниже прежнего порога.
+# ⚠️⚠️ THE LAST SENTENCE WAS AN ASSUMPTION, AND IT'S WRONG. "The base is the same, SO the
+# ceiling is shared" is reasoning, not a measurement: only one file was tested from a cold
+# start. On 2026-09-14 a player hit a DOS drop-out on `FLOOR02` (38,032 b) -- under the old
+# threshold, the gate was green. Control: the Japanese original of the same file (35,707 b)
+# survives, ours doesn't; the called `FLOOR02A` is irrelevant. Size ladder on a reproducible
+# crash (`emu/threshold.py`):
+#     38,032 ❌   37,591 ✅   36,495 ✅   35,707 ✅
+# So THIS room's boundary is 37,591…38,032, over two thousand below the old threshold.
 #
-# Новый порог = 36 958 б, размер самого большого скрипта, который игра возила САМА. Это не
-# ещё одна экстраполяция, а единственное число про буфер, которое подтверждено не нами:
-# оригинальная игра с ним работает на всех комнатах. Под него ушли десять наших файлов —
-# чинятся `tools/split.py` (перенос веток, текст не трогается) и `tools/tighten.py`.
-# ⚠️ Порог зависит от комнаты, и 36 958 — не доказанный потолок, а безопасный ориентир.
-# Единственная настоящая проверка была и остаётся одна: зайти в комнату в эмуляторе.
+# New threshold = 36,958 b, the size of the largest script the game itself ever shipped.
+# That's not another extrapolation, but the one number about the buffer that isn't our own
+# guess: the original game runs on it in every room. Ten of our files ended up over it --
+# fixed by `tools/split.py` (moving branches out, text untouched) and `tools/tighten.py`.
+# ⚠️ The threshold depends on the room, and 36,958 is not a proven ceiling, just a safe
+# reference point. The one real check was and remains: walk into the room in the emulator.
 MES_MAX = 36_958        # STATUS.md §30
 
 
 def gate_size(mes_path):
-    """Скомпилированный сценарий не должен превышать буфер движка.
+    """The compiled scenario must not exceed the engine's buffer.
 
-    Это не косметика: за порогом игра не «подтормаживает», а умирает при заходе в локацию,
-    и ещё ДО смерти затирает соседний блок данных игрока (str/def приходят мусором).
+    This isn't cosmetic: past the threshold the game doesn't "lag" -- it dies on entering
+    the location, and BEFORE dying it clobbers the adjacent player data block (str/def
+    come back as garbage).
     """
     n = mes_path.stat().st_size
     if n > MES_MAX:
-        return (f'compiled {n} b > {MES_MAX} b: движок не переживёт загрузку этой локации '
-                f'(измеренная граница 40 092/40 115)')
+        return (f'compiled {n} b > {MES_MAX} b: the engine will not survive loading this '
+                f'location (measured boundary 40,092/40,115)')
     return None
 
 def juice(args, cwd):
@@ -246,29 +250,31 @@ def juice(args, cwd):
                           capture_output=True, text=True, timeout=900)
 
 def _literalised(sk: str) -> str:
-    """Нормализовать скелет так, чтобы «имя литералом вместо словарного текста» не считалось
-    расхождением: TEXT и str — один и тот же вывод строки, а формы вывода строки можно
-    снимать и добавлять.
+    """Normalize the skeleton so "name as a literal instead of dict text" doesn't count as a
+    divergence: TEXT and str are the same string output, and string-output forms can be
+    dropped or added.
 
-    ⚠️ ЧТО ЭТО ПЕРЕСТАЁТ ПРОВЕРЯТЬ: у файла из LITERALISED больше не сверяется ни выбор
-    строкового опкода, ни само наличие форм вывода строки. Порядок веток, вызовы, процедуры
-    и работа с регистрами сверяются как прежде — а именно там живут поломки, которые гейт
-    и заводился ловить. Взамен снятого: emu/item_probe.py снимает бокс названия кадром,
-    emu/save_probe.py проверяет, что резидентный скрипт жив.
+    ⚠️ WHAT THIS STOPS CHECKING: for a file in LITERALISED, neither the choice of string
+    opcode nor the presence of string-output forms is compared anymore. Branch order, calls,
+    procedures and register handling are still compared as before -- and that's exactly
+    where the breakage lives that this gate was built to catch. In place of what was
+    dropped: emu/item_probe.py grabs the name box on a frame, emu/save_probe.py checks that
+    the resident script is alive.
     """
     s = sk.replace('TEXT', 'str')
-    s = re.sub(r'\s*""', '', s)                       # содержимое строк skeleton() уже обнулил
-    s = re.sub(r'\((?:str|text)\s*\)\s*', '', s)      # пустая форма вывода строки
+    s = re.sub(r'\s*""', '', s)                       # string contents already zeroed by skeleton()
+    s = re.sub(r'\((?:str|text)\s*\)\s*', '', s)      # empty string-output form
     return s
 
 
-# Поле названия предмета не разжимает словарь .MES, поэтому английские названия пишутся
-# литералом (str …), а не (text …) — иначе на экране половинки кандзи. Замеры и разбор:
-# STATUS.md §13; правку делает tools/itembox.py, кадром проверяет emu/item_probe.py.
+# The item-name field doesn't decompress the .MES dictionary, so English names are written
+# as a literal (str …), not (text …) -- otherwise the screen shows half-kanji. Measurements
+# and analysis: STATUS.md §13; the fix lives in tools/itembox.py, checked on a frame by
+# emu/item_probe.py.
 #
-# ⚠️ Список не перечисляем руками: блок есть в 28 файлах (START, START1 и 26 боевых
-# SENTO*), и захардкоженный набор разъехался бы с ними при первом же изменении. Признак —
-# сам блок в переведённом исходнике.
+# ⚠️ The list isn't hand-enumerated: the block is present in 28 files (START, START1 and 26
+# battle SENTO*), and a hardcoded set would drift from them at the first change. The marker
+# is the block itself, present in the translated source.
 _ITEMBOX = '((== (~ @ 23) 0)'
 
 
@@ -293,8 +299,8 @@ def gate_compile_and_structure(workdir: pathlib.Path, name: str):
     back = tmp / f'{name}.rkt'
     if not back.exists():
         return f'recompiled file will not decompile: {r.stderr.strip()[:200]}'
-    # Объявленные исправления логики (tools/logicfix.py) применяются и к ЭТАЛОНУ: тогда
-    # разрешено ровно объявленное изменение, а любое другое по-прежнему ловится.
+    # Declared logic fixes (tools/logicfix.py) are applied to the REFERENCE too: that way
+    # exactly the declared change is allowed, and anything else is still caught.
     import logicfix
     a = skeleton(logicfix.fixed(name, (workdir / f'{name}.orig.rkt').read_text(encoding='utf-8')))
     b = skeleton(back.read_text(encoding='utf-8'))
@@ -340,13 +346,13 @@ def gate_edges(ja_list, en_list):
             bad.append((i, ja[:48], en[:48]))
     return bad
 
-MENU_COLS = 24     # ширина строки меню, снята с самого движка: proc 13 рисует
-                   # (box-inv 37 … 60 …) и (box 1 24 24 39) -- 24 половинные колонки,
-                   # окно фиксированное и по содержимому НЕ растягивается.
+MENU_COLS = 24     # menu row width, taken from the engine itself: proc 13 draws
+                   # (box-inv 37 … 60 …) and (box 1 24 24 39) -- 24 half-columns,
+                   # the window is fixed and does NOT stretch to fit content.
 
 
 def menu_spans(src):
-    """Байтовые границы каждого (menu-show …): пункт внутри -- это строка меню."""
+    """Byte bounds of each (menu-show …): an entry inside it is a menu row."""
     out = []
     for m in re.finditer(r'\(menu-show\b', src):
         d, i = 0, m.start()
@@ -363,16 +369,17 @@ def menu_spans(src):
 
 
 def _cols(t):
-    """Ширина в половинных колонках: японский знак занимает две, латиница одну."""
+    """Width in half-columns: a Japanese glyph takes two, a Latin one takes one."""
     return sum(2 if ord(c) > 0x2000 else 1 for c in t)
 
 
 def gate_menu_width(orig_src, en_src, forms_fn):
-    """Пункт меню, который не влезает в окно, обрезается на полуслове.
+    """A menu entry that doesn't fit the window gets cut off mid-word.
 
-    Замечено человеком на экране: «What's the Swordsman's P» -- окно кончилось. Меню
-    рисует proc 13 с фиксированной шириной 24, поэтому проверка точная, а не на глаз.
-    Меню, где сам ОРИГИНАЛ шире 24, пропускаем: такое окно рисует другой код.
+    Spotted by a human on screen: "What's the Swordsman's P" -- the window ran out. The
+    menu is drawn by proc 13 with a fixed width of 24, so the check is exact, not eyeballed.
+    Menus where the ORIGINAL itself is wider than 24 are skipped: that window is drawn by
+    different code.
     """
     sp = menu_spans(orig_src)
     fo, fe = forms_fn(orig_src), forms_fn(en_src)

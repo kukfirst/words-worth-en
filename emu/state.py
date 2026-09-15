@@ -55,13 +55,13 @@ def _load_scripts():
         for p in sorted(ORIGINALS.iterdir()):
             if p.name.endswith(".MES") and p.is_file():
                 out[p.name + ":ja"] = p.read_bytes()
-    # ⚠️ Знать два билда мало. Эксперимент, который СОБИРАЕТ третий вариант скрипта
-    # (emu/size_ladder.py, emu/bisect_crash.py), кладёт в образ файл, которого нет ни в
-    # en/, ни в work/ -- и тогда identify() честно не узнаёт сцену и молча возвращает
-    # только START.MES. Читается это как «игра не дошла до локации», а на самом деле
-    # означает «датчик не знает этих байтов». Ровно та же слепота, про которую
-    # предупреждает docstring выше, только на шаг дальше.
-    # → эксперимент передаёт свой .mes через WW_EXTRA_MES (можно через ":").
+    # ⚠️ Knowing two builds isn't enough. An experiment that ASSEMBLES a third script
+    # variant (emu/size_ladder.py, emu/bisect_crash.py) puts a file into the image that's in
+    # neither en/ nor work/ -- and then identify() honestly fails to recognize the scene and
+    # silently falls back to just START.MES. That reads as "the game never reached the
+    # location", but actually means "the sensor doesn't know these bytes". The exact same
+    # blindness the docstring above warns about, just one step further.
+    # → the experiment passes its own .mes through WW_EXTRA_MES (":"-separated is fine).
     for extra in filter(None, os.environ.get("WW_EXTRA_MES", "").split(":")):
         q = pathlib.Path(extra)
         if q.is_file():
@@ -118,37 +118,37 @@ def _at(state, base):
     return cands[0]
 
 
-PROBE_AHEAD = 512         # ⚠️ не догадка, а замер: см. комментарий в _next_slot
+PROBE_AHEAD = 512         # ⚠️ not a guess, a measurement: see the comment in _next_slot
 
 
 def _next_slot(base, name):
-    """Начало следующего слота — ПРЕДПОЛОЖЕНИЕ, которое обязано проверяться.
+    """Start of the next slot — an ASSUMPTION that must be verified.
 
-    ⚠️ «Встык, с выравниванием до чётного» — правило, откалиброванное на ОДНОМ образе.
-    На QA-сборке оно промахивается: `START.MES` (11 103 б) лежит по 0x95f0, арифметика даёт
-    0xC150, а `FLOOR05.MES:ja` реально лежит по **0xC170** — на 32 байта дальше. Промах не
-    приводил к ошибке: walk() просто обрывался и возвращал ['START.MES'], что читается как
-    «комната не загружена». Ровно то же читалось бы, если бы игра и правда не загрузила
-    комнату, — то есть датчик молча путал две разные ситуации.
+    ⚠️ "Back-to-back, rounded up to even" — a rule calibrated on ONE image. On the QA build
+    it misses: `START.MES` (11,103 b) sits at 0x95f0, the arithmetic gives 0xC150, but
+    `FLOOR05.MES:ja` actually sits at **0xC170** — 32 bytes further out. The miss didn't
+    cause an error: walk() simply cut off and returned ['START.MES'], which reads as "the
+    room hasn't loaded". Exactly the same thing would read if the game genuinely hadn't
+    loaded the room — meaning the sensor was silently conflating two different situations.
     """
     n = len(SCRIPT_BYTES[name])
     return base + n + (n & 1)
 
 
 def walk(state, first=FIRST_SLOT):
-    """Стек скриптов от `first`: [(base, name), ...], внешний первым.
+    """Script stack from `first`: [(base, name), ...], outermost first.
 
-    Возвращает (стек, оборван?). `оборван` = дошли до места, где скрипт не опознан, но в
-    пределах PROBE_AHEAD его тоже не нашли. Вызывающий обязан различать «стек кончился» и
-    «датчик потерял след» — раньше оба выглядели одинаково.
+    Returns (stack, truncated?). `truncated` = reached a spot where the script isn't
+    recognized, and it wasn't found within PROBE_AHEAD either. The caller must distinguish
+    "the stack ended" from "the sensor lost the trail" — they used to look identical.
     """
     out, base, seen = [], first, set()
     while base not in seen:
         seen.add(base)
         name = _at(state, base)
         if name is None:
-            # арифметика промахнулась -- ищем начало следующего слота рядом, прежде чем
-            # объявлять, что стек кончился
+            # the arithmetic missed -- probe nearby for the next slot's start before
+            # declaring the stack ended
             for d in range(2, PROBE_AHEAD, 2):
                 name = _at(state, base + d)
                 if name is not None:
@@ -162,12 +162,12 @@ def walk(state, first=FIRST_SLOT):
 
 
 def resident(state, limit=SCAN_LIMIT):
-    """Все известные скрипты, реально лежащие в памяти. ~120 мс, поэтому только на промахе.
+    """All known scripts actually sitting in memory. ~120 ms, so only on a miss.
 
-    ⚠️ Согласия иголок НЕДОСТАТОЧНО. На QA-состоянии голосование выдавало пять скриптов, из
-    которых три — призраки: `START.MES:ja` по 0x9625 (11 согласных иголок!) и `FLOOR05.MES`
-    по 0xc1e9. Два билда одного скрипта делят длинные куски байтов, и иголки садятся на
-    сдвинутую базу. Поэтому каждый кандидат ДОСВЕРЯЕТСЯ побайтно — призраки отваливаются.
+    ⚠️ Needle agreement is NOT ENOUGH. On the QA state, voting turned up five scripts, three
+    of which were ghosts: `START.MES:ja` at 0x9625 (11 agreeing needles!) and `FLOOR05.MES`
+    at 0xc1e9. Two builds of the same script share long byte runs, and needles land on a
+    shifted base. So every candidate gets DOUBLE-CHECKED byte by byte — the ghosts drop out.
     """
     low = state[:limit]
     cands = {}
@@ -192,12 +192,12 @@ def resident(state, limit=SCAN_LIMIT):
 
 
 def rescan(state, limit=SCAN_LIMIT):
-    """Стек, когда якорь уехал. Теперь это сверенный скан, а не walk() от нижней базы.
+    """The stack when the anchor has drifted. Now a verified scan, not walk() from the lowest base.
 
-    ⚠️ Прежняя версия находила самую нижнюю базу и шла от неё ТОЙ ЖЕ арифметикой, что и
-    walk(). То есть «запасной путь» опирался на то же непроверенное правило и падал вместе
-    с основным: на QA-состоянии оба возвращали ['START.MES'], хотя `FLOOR05.MES:ja` лежал
-    в памяти по 0xC170.
+    ⚠️ The old version found the lowest base and walked from it using the SAME arithmetic as
+    walk(). So the "fallback path" relied on the same unverified rule and failed right along
+    with the primary one: on the QA state both returned ['START.MES'], even though
+    `FLOOR05.MES:ja` sat in memory at 0xC170.
     """
     return resident(state, limit)
 
@@ -212,12 +212,13 @@ def identify(state, first=FIRST_SLOT):
     script (START.MES), the one on top of the stack is the room/event actually playing.
     Pass last turn's `anchor` back in to keep this on the O(1) path.
     """
-    # ⚠️ Быстрый путь по арифметике убран НАСОВСЕМ, и вот почему. Он опирался на правило
-    # «следующий слот встык», которое верно не на всех образах (см. _next_slot), а его
-    # промах выглядел как готовый короткий ответ. Попытка чинить это флагом «оборван» не
-    # помогла: стек ВСЕГДА где-то кончается, флаг всегда истинен, полный скан всё равно
-    # выполнялся каждый раз -- только теперь ещё и под видом оптимизации.
-    # 118 мс против секунд на ход агента. Точность здесь дешевле догадки.
+    # ⚠️ The fast arithmetic path was removed FOR GOOD, and here's why. It relied on the
+    # "next slot is back-to-back" rule, which isn't true on all images (see _next_slot), and
+    # its misses looked like a ready-made short answer. Trying to fix that with a
+    # "truncated" flag didn't help: the stack ALWAYS ends somewhere, the flag was always
+    # true, and a full scan ran every time regardless -- just now disguised as an
+    # optimization.
+    # 118 ms against seconds per agent turn. Accuracy is cheaper here than a guess.
     stack = resident(state)
     rescanned = True
     return {"scene": stack[-1][1] if stack else None,
@@ -298,16 +299,16 @@ def stats(st):
     starts with level 0, STR 33164 and DEF 28740 (the panel prints those as "MAX") where
     the original has level 1, STR 8, DEF 7.
 
-    ⚠️ HP нашёлся не поиском по значению, а ЧТЕНИЕМ СКРИПТА, который рисует панель
-    (START.MES): `(number (+ (~ M 1) 1)) "/" (number (+ (~ M 9) 1))`. Блок игрока -- это
-    массив M скриптов (uint16, шаг 2): M0 level, M1 HP-1, M2 exp, M3 STR, M4 DEF, M6 gold,
-    M9 макс.HP-1. HP хранится НА ЕДИНИЦУ МЕНЬШЕ показанного -- поэтому все прошлые поиски
-    «12 при 12/12» и не находили ничего. При смерти панель пишет 0000, то есть M1 = -1:
-    читаем со знаком. Подтверждено замером в бою (emu/signal_audit.py).
+    ⚠️ HP wasn't found by a value search, but by READING THE SCRIPT that draws the panel
+    (START.MES): `(number (+ (~ M 1) 1)) "/" (number (+ (~ M 9) 1))`. The player block is
+    the scripts' M array (uint16, stride 2): M0 level, M1 HP-1, M2 exp, M3 STR, M4 DEF,
+    M6 gold, M9 max HP-1. HP is stored ONE LESS than what's shown -- which is why every past
+    search for "12 at 12/12" found nothing. On death the panel prints 0000, meaning M1 = -1:
+    read it signed. Confirmed by measurement in combat (emu/signal_audit.py).
 
-    ⚠️ Вне подземелья блок переинициализирован: на титуле и в G_OVER память даёт
-    STR 0 / DEF 0 / GOLD 100, а панель -- прежние значения. Судить по этим числам можно
-    только в игре (`boot.in_game`).
+    ⚠️ Outside the dungeon the block is reinitialized: on the title screen and in G_OVER,
+    memory gives STR 0 / DEF 0 / GOLD 100 while the panel shows the old values. These
+    numbers can only be trusted in-game (`boot.in_game`).
     """
     import struct
     m = lambda i, fmt="<H": struct.unpack_from(fmt, st, M_BASE + 2 * i)[0]
@@ -315,11 +316,11 @@ def stats(st):
             "hp": m(1, "<h") + 1, "hp_max": m(9, "<h") + 1}
 
 
-M_BASE = 0x1790e     # массив M скриптов = блок игрока (START.MES рисует панель из него)
+M_BASE = 0x1790e     # the scripts' M array = the player block (START.MES draws the panel from it)
 
 
 X_AXIS = 0x37438
-POS_AXIS = 0x3743a   # = Y_AXIS; имя оставлено, на него ссылается старый код
+POS_AXIS = 0x3743a   # = Y_AXIS; name kept because old code refers to it
 Y_AXIS = 0x3743a     # position along the direction of travel; the OTHER axis is not found
 FACING = 0x3743c
 COMPASS = ("north", "east", "south", "west")   # order unverified; the CYCLE is what is proven
@@ -337,36 +338,38 @@ def facing(st):
     return st[FACING] if len(st) > FACING else None
 
 
-# Куда ведёт шаг вперёд при каждом курсе. Выведено из замкнутого круга (см. where()).
+# Where a step forward leads for each heading. Derived from a closed loop (see where()).
 STEP = {0: (1, 0), 1: (0, -1), 2: (-1, 0), 3: (0, 1)}
 
 
 def where(st):
-    """Клетка игрока и курс. Прочитано из памяти, не угадано по картинке.
+    """The player's cell and heading. Read from memory, not guessed from the picture.
 
-    Обе оси лежат рядом, как поля одной записи: X `0x37438`, Y `0x3743a`, курс `0x3743c`.
+    Both axes sit next to each other, like fields of one record: X `0x37438`, Y `0x3743a`,
+    heading `0x3743c`.
 
-    Y нашли первым: человек прошёл вперёд-вперёд-назад-назад дважды, и байт дал
-    5,4,3,4,5,4,3,4,5,4,3,2, не шелохнувшись на восьми чистых поворотах.
+    Y was found first: a human walked forward-forward-back-back twice, and the byte gave
+    5,4,3,4,5,4,3,4,5,4,3,2, not budging on eight clean turns.
 
-    X дался только со второго захода, и вот чем он отличался. Тот первый проход держал ОДИН
-    курс, поэтому X всё время стоял и был неотличим от всего прочего, что стояло. Скриптовые
-    пробы из сохранения тоже ничего не дали -- игрок упирался в стену (`emu/axis_walk.py`).
-    Сработала запись ЖИВОГО прохода: 12 настоящих шагов на курсах 0 и 2, где Y не двигался,
-    против 15 шагов на курсах 1 и 3, 14 поворотов и 2 упоров как контроля. Условию «меняется
-    только на шагах поперёк известной оси» удовлетворил РОВНО ОДИН байт из 258 048.
+    X only came on the second attempt, and here's how that one differed. That first pass
+    held ONE heading the whole time, so X sat still and was indistinguishable from everything
+    else that sat still. Scripted probes from a save didn't help either -- the player just
+    hit a wall (`emu/axis_walk.py`). What worked was logging a LIVE walkthrough: 12 real
+    steps on headings 0 and 2, where Y didn't move, against 15 steps on headings 1 and 3, 14
+    turns, and 2 wall-bumps as a control. The condition "changes only on steps across the
+    known axis" was met by EXACTLY ONE byte out of 258,048.
 
-    Подтверждение сильнее самого поиска: человек трижды обошёл квадратную комнату по часовой,
-    и (X, Y, курс) трижды вернулись к тем же значениям -- цикл из 10 нажатий, клетки X 12..14,
-    Y 1..2. Замкнутый обход не подделаешь совпадением.
+    Confirmation is stronger than the search itself: a human circled a square room clockwise
+    three times, and (X, Y, heading) returned to the same values three times -- a 10-press
+    cycle, cells X 12..14, Y 1..2. A closed loop can't be faked by coincidence.
 
-    ⚠️ `left` крутит курс на +1 по кругу (2→3→0→1→2), а НЕ «вниз».
+    ⚠️ `left` rotates the heading by +1 around the circle (2→3→0→1→2), NOT "down".
     """
     if len(st) <= FACING:
         return None
     f = st[FACING]
     return {"x": st[X_AXIS], "y": st[Y_AXIS], "facing": f,
-            "pos": st[Y_AXIS],                       # старое имя, чтобы не рвать вызовы
+            "pos": st[Y_AXIS],                       # old name, kept so callers don't break
             "ahead": STEP.get(f)}
 
 
@@ -395,37 +398,40 @@ if __name__ == "__main__":
     print(f"identify(): {fast:.2f} ms  {info}")
     t = time.perf_counter(); r = resident(st); slow = (time.perf_counter() - t) * 1000
     print(f"resident(): {slow:.1f} ms  {[n for _, n in r]} at {[hex(b) for b, _ in r]}")
-    # walk() больше не питает identify(), но осталась как ПРОБА раскладки: расхождение с
-    # resident() означает, что правило «слоты встык» на этом образе не работает. Это
-    # информация, а не провал -- ровно так и обнаружилось смещение 0xC150 -> 0xC170.
+    # walk() no longer feeds identify(), but it's kept as a PROBE of the layout: a mismatch
+    # with resident() means the "slots are back-to-back" rule doesn't hold on this image.
+    # That's information, not a failure -- it's exactly how the 0xC150 -> 0xC170 offset
+    # was found.
     w, truncated = walk(st)
     if [n for _, n in w] != [n for _, n in r]:
-        print(f"   ⚠️ арифметика слотов расходится с байтами: walk()={[n for _, n in w]}"
+        print(f"   ⚠️ slot arithmetic disagrees with the bytes: walk()={[n for _, n in w]}"
               f" at {[hex(b) for b, _ in w]}")
     ok = info["scene"] is not None and r == sorted(r)
-    print("SELF-TEST:", "PASS" if ok else "FAIL -- ничего не опознано в памяти")
+    print("SELF-TEST:", "PASS" if ok else "FAIL -- nothing recognized in memory")
 
-# --- КАРТА ЭТАЖА ИЗ ПАМЯТИ -------------------------------------------------------------
-# Этаж не нужно нащупывать шагами: игра держит его целиком. На образе лежат `FL0..FL12.MP3`
-# по 906 байт (расширение обманчиво, это данные 1993 года, не звук), и файл этажа грузится
-# в память ЦЕЛИКОМ -- в стартовом состоянии `FL5.MP3` найден по смещению 0x15DB0 побайтно.
+# --- FLOOR MAP FROM MEMORY --------------------------------------------------------------
+# The floor doesn't need to be felt out by walking: the game holds it whole. The image
+# carries `FL0..FL12.MP3`, 906 bytes each (the extension is misleading, it's 1993 data, not
+# audio), and the floor file is loaded into memory WHOLE -- in the starting state `FL5.MP3`
+# is found byte-for-byte at offset 0x15DB0.
 #
-# Формат вскрыт без единого подгоняемого параметра. Заголовок 4 байта -- `0f 00 0f 00`,
-# то есть 15x15. Дальше 225 клеток по 4 байта:
-#   байт 0 = (юг << 4) | запад      байт 2 = номер события (лестница, триггер), обычно 0
-#   байт 1 = (север << 4) | восток  байт 3 = флаг 0/1
-# Ниббл: 0 -- открыто, 3 -- проём или дверь, 1 -- ещё какой-то проход (14 штук на этаж),
-# 9 -- стена.
+# The format was cracked without a single fudged parameter. 4-byte header -- `0f 00 0f 00`,
+# i.e. 15x15. Then 225 cells, 4 bytes each:
+#   byte 0 = (south << 4) | west      byte 2 = event number (stairs, trigger), usually 0
+#   byte 1 = (north << 4) | east      byte 3 = flag 0/1
+# Nibble: 0 -- open, 3 -- opening or door, 1 -- some other kind of passage (14 per floor),
+# 9 -- wall.
 #
-# ⚠️ Как это доказано, потому что подгонкой такое доказать нельзя. Общее ребро записано
-# ДВАЖДЫ -- у клетки и у соседа. Если разбор верен, обе записи обязаны совпадать всегда:
-# «ниббл 0 клетки == ниббл 2 южного соседа» дало 210 из 210, «ниббл 3 == ниббл 1 восточного»
-# тоже 210 из 210. После этого разбор сверили с 38 измерениями, набитыми ногами живым
-# агентом: 38 из 38 при правиле «проход <=> ниббл != 9».
+# ⚠️ How this is proven, because fitting a curve can't prove it. A shared edge is recorded
+# TWICE -- at the cell and at the neighbour. If the parse is right, both records must always
+# agree: "cell's nibble 0 == south neighbour's nibble 2" gave 210 out of 210, "nibble 3 ==
+# east neighbour's nibble 1" also 210 out of 210. The parse was then cross-checked against
+# 38 measurements logged on foot by a live agent: 38 out of 38 under the rule
+# "passage <=> nibble != 9".
 MAP_ADDR = 0x15DF0
 MAP_W = MAP_H = 15
 MAP_BYTES = 4 + MAP_W * MAP_H * 4
-# сторона (компас STEP) -> номер ниббла: 0=+x восток, 1=-y север, 2=-x запад, 3=+y юг
+# side (compass STEP) -> nibble index: 0=+x east, 1=-y north, 2=-x west, 3=+y south
 SIDE_NIB = {0: 3, 1: 2, 2: 1, 3: 0}
 WALL = 9
 
@@ -436,19 +442,19 @@ def _map_nibbles(block, x, y):
     return [b0 >> 4, b0 & 15, b1 >> 4, b1 & 15]
 
 
-# ⚠️ Совпадение рёбер -- почти инвариант, но НЕ абсолютный: у формата есть законная
-# асимметрия, односторонние переходы. Измерено по всем 16 файлам карт (WW/FL*.MP3,
-# по 906 б): 36 расхождений на 6720 рёбер, то есть 0.5 %, максимум 8 на этаж. Виды:
-# (1,9) 32 раза, (3,9) 3, (0,1) 1 -- то есть «проход с одной стороны, стена с другой».
-# Требование абсолютного совпадения браковало 10 настоящих карт из 16, и floormap()
-# на этих этажах уходил искать блок по всей памяти вместо того, чтобы взять свой.
-# Проверка остаётся сильной: значений нибблов всего четыре, и случайный блок не даст
-# 97 % совпавших рёбер из 420 ни при каких обстоятельствах.
-MAP_MAX_ASYM = 12          # 3 % рёбер; наблюдаемый максимум 8
+# ⚠️ Edge agreement is close to an invariant, but NOT absolute: the format has legitimate
+# asymmetry, one-way transitions. Measured across all 16 map files (WW/FL*.MP3, 906 b each):
+# 36 mismatches out of 6720 edges, i.e. 0.5%, max 8 per floor. Kinds: (1,9) 32 times, (3,9) 3,
+# (0,1) 1 -- meaning "passage on one side, wall on the other".
+# Requiring an absolute match rejected 10 real maps out of 16, and floormap() on those
+# floors went off scanning all of memory for a block instead of taking its own.
+# The check remains strong: there are only four nibble values, and a random block will
+# never give 97% matching edges out of 420 by chance.
+MAP_MAX_ASYM = 12          # 3% of edges; observed max is 8
 
 
 def map_asymmetry(block):
-    """Сколько рёбер записаны у соседей по-разному. -1 -- это вообще не блок карты."""
+    """How many edges are recorded differently by the two neighbours. -1 means this isn't a map block at all."""
     if len(block) < MAP_BYTES or block[0:4] != b"\x0f\x00\x0f\x00":
         return -1
     bad = 0
@@ -463,17 +469,17 @@ def map_asymmetry(block):
 
 
 def _map_consistent(block):
-    """Блок похож на карту этажа: рёбра сходятся, кроме горстки односторонних переходов."""
+    """Block looks like a floor map: edges agree, apart from a handful of one-way transitions."""
     bad = map_asymmetry(block)
     return 0 <= bad <= MAP_MAX_ASYM
 
 
 def floormap(snap, addr=MAP_ADDR):
-    """Карта текущего этажа из памяти или None.
+    """The current floor's map from memory, or None.
 
-    Сначала смотрим по известному адресу; если там не карта -- ищем по заголовку и проверяем
-    инвариантом. Проверка не формальность: случайный блок его не проходит, так что найденное
-    либо карта, либо ничего.
+    Look at the known address first; if that isn't a map, search by header and verify with
+    the invariant. The check isn't a formality: a random block won't pass it, so what's found
+    is either a real map or nothing.
     """
     block = bytes(snap[addr:addr + MAP_BYTES])
     if not _map_consistent(block):
@@ -501,21 +507,22 @@ def floormap(snap, addr=MAP_ADDR):
 
 
 def map_side(fm, x, y, side):
-    """'open' | 'wall' -- то, что говорит САМА ИГРА про эту сторону."""
+    """'open' | 'wall' -- what THE GAME ITSELF says about this side."""
     c = (fm or {}).get("cells", {}).get((x, y))
     if not c:
         return None
     return "wall" if c["sides"][side] == WALL else "open"
 
 
-# --- охота на здоровье ------------------------------------------------------------------
-# HP не нашлись ни рядом с блоком игрока, ни поиском пары 16-битных «12»: во всех 305 ходах,
-# где статус-панель попадала в текст, здоровье было 0012/0012, а различать одинаковые числа
-# нечем. Значит нужен момент, когда HP ОТЛИЧАЮТСЯ от максимума -- то есть бой. Тогда пара
-# (текущее, максимум) становится приметной, и пересечение кандидатов по нескольким таким
-# моментам оставляет один адрес. Это тот же приём, которым нашли координаты.
+# --- hunting for health -------------------------------------------------------------------
+# HP wasn't found next to the player block, nor by searching for a pair of 16-bit "12"s: in
+# all 305 turns where the status panel made it into the text, health was 0012/0012, and
+# there's nothing to tell identical numbers apart by. So what's needed is a moment where HP
+# DIFFERS from the max -- that is, combat. Then the (current, max) pair becomes distinctive,
+# and intersecting candidates across several such moments leaves a single address. Same
+# trick used to find the coordinates.
 def hp_candidates(snap, cur, mx, span=2):
-    """Смещения, где рядом лежат `cur` и `mx` как 16-битные слова."""
+    """Offsets where `cur` and `mx` sit next to each other as 16-bit words."""
     import struct
     out = []
     blob = bytes(snap)
@@ -533,17 +540,18 @@ def hp_candidates(snap, cur, mx, span=2):
     return out
 
 
-# --- состояние игры по раскладке, прочитанной из её собственных скриптов ------------------
-# ⚠️ Всё ниже выведено не поиском по значениям, а ЧТЕНИЕМ СКРИПТОВ, которые это рисуют и
-# задают, и подтверждено замером (emu/signal_audit.py, STATUS.md §18):
+# --- game state via the layout read from its own scripts -----------------------------------
+# ⚠️ Everything below was derived not by a value search but by READING THE SCRIPTS that draw
+# and set it, and confirmed by measurement (emu/signal_audit.py, STATUS.md §18):
 #
-#   файл сохранения FLAG0..4 (3072 б) -- это ПРЯМОЙ снимок памяти с SAVE_BASE. Поэтому один
-#   декодер читает и живую игру, и сейв на диске (`saved()`).
-#   +0x000  имя текущей сцены строкой («floor05.mes») -- без 118-мс скана иголками identify()
-#   +0x020  регистры (: N) скриптов -- ПОЛУБАЙТЫ, младший первым: регистр N в полубайте N.
-#           Потому все прошлые поиски предметов байтами и словами пустели; PARA.MES задаёт
-#           новой игре 900=8 901=2 902=0 903=1, и во всём снимке этот узор один.
-#   +0x31e  массив M = блок игрока (stats выше), снаряжение M15/M17/M18/M19.
+#   the FLAG0..4 save file (3072 b) is a DIRECT memory snapshot from SAVE_BASE. So one
+#   decoder reads both the live game and the save on disk (`saved()`).
+#   +0x000  current scene name as a string ("floor05.mes") -- no 118 ms needle scan via identify()
+#   +0x020  scripts' (: N) registers -- NIBBLES, low first: register N sits in nibble N.
+#           That's why every past search for items in bytes and words came up empty; PARA.MES
+#           sets a new game to 900=8 901=2 902=0 903=1, and this pattern is unique across the
+#           whole snapshot.
+#   +0x31e  the M array = the player block (stats above), equipment M15/M17/M18/M19.
 SAVE_BASE = 0x175f0
 SAVE_SIZE = 3072
 REG_BASE = SAVE_BASE + 0x20
@@ -552,7 +560,7 @@ EQUIP_SLOTS = {'weapon': 15, 'armor': 17, 'helm': 18, 'shield': 19}
 
 
 def _equip_names():
-    """Названия снаряжения -- из того же скрипта, что рисует панель (START.MES), а не руками."""
+    """Equipment names -- from the same script that draws the panel (START.MES), not by hand."""
     import re
     src = HERE.parent / 'en' / 'START.MES.rkt'
     names = {}
@@ -569,7 +577,7 @@ EQUIP_NAMES = _equip_names()
 
 
 def scene_name(snap, base=SAVE_BASE):
-    """Имя сцены, которую игра сама считает текущей: строка в начале области сейва."""
+    """Name of the scene the game itself considers current: the string at the start of the save area."""
     raw = bytes(snap[base:base + 13]).split(b'\0')[0]
     try:
         return raw.decode('ascii').upper() or None
@@ -578,7 +586,7 @@ def scene_name(snap, base=SAVE_BASE):
 
 
 def reg(snap, n, base=REG_BASE):
-    """Регистр (: n) скриптов -- полубайт, младший первым."""
+    """Scripts' register (: n) -- a nibble, low first."""
     b = snap[base + n // 2]
     return (b >> 4) if n % 2 else (b & 15)
 
@@ -597,7 +605,7 @@ def equipment(snap):
 
 
 def names(snap, base=SAVE_BASE):
-    """Имена героев так, как их ввёл игрок: те же поля, что переписывает `savenames`."""
+    """Hero names as the player typed them: the same fields `savenames` overwrites."""
     import sys as _sys
     _sys.path.insert(0, str(HERE.parent / 'tools'))
     import savenames
@@ -609,7 +617,7 @@ def names(snap, base=SAVE_BASE):
 
 
 def saved(flag_bytes):
-    """Прочитать файл сохранения FLAG* тем же декодером, что живую игру."""
+    """Read a FLAG* save file with the same decoder used for the live game."""
     pad = bytes(SAVE_BASE) + bytes(flag_bytes) + bytes(0x1000)
     return {'scene': scene_name(pad), 'stats': stats(pad), 'items': items(pad),
             'equipment': equipment(pad)}

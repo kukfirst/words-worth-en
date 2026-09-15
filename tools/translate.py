@@ -315,11 +315,11 @@ def main():
 
         out_src = patch(src, edits)
         out_src = re.sub(r'\(charset "pc98"\)', '(charset "english")', out_src)
-        # ⚠️ (wordwrap …) в meta НЕ ставим. Раньше ставили -- и компилятор резал каждый
-        # строковый кусок сам, от нулевой колонки, не зная про подстановку имени; вместе с
-        # переносами движка это давало слова-сироты и дыры (STATUS.md §16). Раскладку теперь
-        # решает tools/relayout.py и ставит разрывы явно. Вернуть сюда wordwrap -- значит
-        # тихо сломать её на следующем же прогоне конвейера.
+        # ⚠️ We do NOT put (wordwrap …) in meta. We used to -- and the compiler cut every
+        # the string fragment itself, from column zero, unaware of name substitution; together with
+        # the engine's line breaks produced orphan words and gaps (STATUS.md §16). The layout now
+        # handled by tools/relayout.py, which sets line breaks explicitly. Bringing wordwrap back here means
+        # silently break it on the very next pipeline run.
         out_src = re.sub(r'\(set-arr~ @ 21 \(\+ 512 16\)\)', '(set-arr~ @ 21 272)', out_src)
         out_src, _ = number_fix(out_src)
         out_src = rebuild_dict(out_src)

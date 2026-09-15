@@ -1,38 +1,38 @@
 #!/usr/bin/env python3
-"""Развернуть боевые строки, где имя получателя удара названо нанёсшим.
+"""Unwind battle lines where the name of the one TAKING the hit is phrased as the one dealing it.
 
-## Что сломано
+## What's broken
 
-В бою имя печатает `(proc 41)`, а следом идёт форма. Японская форма начинается с `に` --
-частицы, которая делает названное имя ПОЛУЧАТЕЛЕМ:
+In battle, `(proc 41)` prints the name, followed by a form. The Japanese form starts with
+`に` -- a particle that makes the named name the RECIPIENT:
 
-    (proc 41) (text "に" (number D) "のダメージを与えた！！")     [ИМЯ] получил D урона
+    (proc 41) (text "に" (number D) "のダメージを与えた！！")     [NAME] took D damage
 
-Английский на том же месте говорит обратное:
+The English in the same spot says the opposite:
 
-    (proc 41) (text " dealt " (number D) " damage!!")            [ИМЯ] нанёс D урона
+    (proc 41) (text " dealt " (number D) " damage!!")            [NAME] dealt D damage
 
-Кадр из эмулятора, которым это поймано: `A Sturdy Dwarf dealt 0 damage to!!` -- Дворф там
-получал, а не наносил, и вдобавок `to` повисло без имени, потому что вставлять после формы
-нечего.
+The emulator frame that caught this: `A Sturdy Dwarf dealt 0 damage to!!` -- the Dwarf there
+was TAKING the hit, not dealing it, and on top of that `to` was left dangling with no name,
+because there's nothing left to insert after the form.
 
-Замер: мест, где японское `に` делает имя получателем, -- **52**; переведено верно 7,
-**перевёрнуто 45** в 23 боевых файлах из 26. Это самая частая строка в игре: по одной на
-каждый удар.
+Measured: places where Japanese `に` makes the name the recipient -- **52**; translated
+correctly in 7, **flipped in 45**, across 23 of 26 battle files. This is the single most
+common line in the game: one per hit.
 
-⚠️ Почему это не поймал ни один гейт. `gate_edges` смотрит знак ПОСЛЕ маркера, а маркера
-здесь нет вовсе -- имя печатает процедура. `gate_width` меряет ширину. Структурный гейт
-сверяет скелет инструкций, а он не менялся. Смысл фразы не проверял никто, и проверить его
-можно было только одним способом -- прочитав кадр.
+⚠️ Why no gate caught this. `gate_edges` looks at the character AFTER a marker, and there is
+no marker here at all -- a procedure prints the name. `gate_width` measures width. The
+structural gate checks the instruction skeleton, and that never changed. Nobody checked the
+MEANING of the phrase, and the only way to check it was to read a frame.
 
-## Как чинится
+## How it's fixed
 
-Замена по форме, не по смыслу: «нанёс» -> «получил», висячее `to` убирается. Правится
-ТОЛЬКО там, где японское `に` подтверждает роль получателя -- список мест считается, а не
-пишется руками.
+A swap by form, not by meaning: "dealt" -> "took", the dangling `to` is dropped. Fixed ONLY
+where Japanese `に` confirms the recipient role -- the list of spots is computed, not
+hand-written.
 
-    tools/battlefix.py            # показать
-    tools/battlefix.py --apply    # записать и пересобрать
+    tools/battlefix.py            # preview
+    tools/battlefix.py --apply    # write and rebuild
 """
 import argparse
 import pathlib
@@ -47,24 +47,24 @@ import gates                                                        # noqa: E402
 
 EN = ROOT / 'en'
 
-# Форма -> исправленная форма. Слева ровно то, что нашлось замером.
+# Form -> fixed form. The left side is exactly what measurement found.
 SWAP = [
     (' dealt ', ' took '),
     (' did no damage', ' took no damage'),
     (' dealt no damage', ' took no damage'),
-    # ⚠️ Одиночная форма: кто-то ужимал её под размер и срезал глагол вовсе.
+    # ⚠️ A one-off form: someone squeezed it to fit the size budget and cut the verb entirely.
     ('- no damage', ' took no damage'),
 ]
-# Висячий хвост: вставлять после формы нечего, имя уже напечатано ДО неё.
+# Dangling tail: nothing to insert after the form, the name is already printed BEFORE it.
 TAIL = [(' damage to it!!', ' damage!!'), (' damage to!!', ' damage!!'),
         (' damage to"', ' damage"'), (' damage to', ' damage')]
 
 
 def sites(src):
-    """(начало, конец, текст) ближайшего (text …) после каждого (proc 41).
+    """(start, end, text) of the nearest (text …) after each (proc 41).
 
-    По балансу скобок, а не регулярным выражением: между ними стоит починка цифр
-    `(set-arr~ @ 20 (// (&& (~ @ 20) 4095) 4096))` с тремя уровнями вложенности.
+    By bracket balance, not a regex: a number fix sits between them,
+    `(set-arr~ @ 20 (// (&& (~ @ 20) 4095) 4096))`, three levels deep.
     """
     out = []
     for m in re.finditer(r'\(proc 41\)', src):
@@ -78,7 +78,7 @@ def sites(src):
 
 
 def fix(form):
-    """Исправленная форма или None, если менять нечего."""
+    """Fixed form, or None if there's nothing to change."""
     out = form
     for a, b in SWAP:
         if a in out:
@@ -92,7 +92,7 @@ def fix(form):
 
 
 def plan(name):
-    """Что поменяется в файле: список (начало, конец, было, стало)."""
+    """What will change in the file: a list of (start, end, was, now)."""
     orig = EN / f'{name}.orig.rkt'
     if not orig.exists():
         return []
@@ -105,7 +105,7 @@ def plan(name):
     for a, b in zip(ja, en):
         if not a or not b:
             continue
-        # ⚠️ Правим ТОЛЬКО там, где японское `に` подтверждает: имя -- получатель.
+        # ⚠️ Fixed ONLY where Japanese `に` confirms: the name is the recipient.
         if '"に' not in a[2][:10]:
             continue
         new = fix(b[2])
@@ -125,28 +125,28 @@ def main(names, apply):
         if len(touched) <= 3:
             for _, _, was, now in rows:
                 print(f'  {name}')
-                print(f'      было : {was}')
-                print(f'      стало: {now}')
+                print(f'      was: {was}')
+                print(f'      now: {now}')
         if apply:
             src = (EN / f'{name}.rkt').read_text(encoding='utf-8')
             for s, e, _, now in sorted(rows, reverse=True):
                 src = src[:s] + now + src[e:]
             (EN / f'{name}.rkt').write_text(src, encoding='utf-8')
-    print(f'\nмест: {total}, файлов: {len(touched)}')
+    print(f'\nspots: {total}, files: {len(touched)}')
     if not apply:
-        print('НЕ ЗАПИСАНО. Применить: tools/battlefix.py --apply')
+        print('NOT RECORDED. Apply: tools/battlefix.py --apply')
         return 0
-    print('\nпересборка:')
+    print('\nrebuild:')
     bad = 0
     for name in touched:
         gates.juice(['-cf', f'{name}.rkt'], EN)
         mes = EN / f'{name}.rkt.mes'
         n = mes.stat().st_size if mes.exists() else 0
-        over = ' ⚠️ ЗА ПОРОГОМ' if n > gates.MES_MAX else ''
+        over = '⚠️ OVER THRESHOLD' if n > gates.MES_MAX else ''
         if not n or over:
             bad += 1
-        print(f'  {name:16} {n} б{over}', flush=True)
-    print(f'\n{"❌ провалов: " + str(bad) if bad else "✅ все пересобрались под порогом"}')
+        print(f'  {name:16} {n} b{over}', flush=True)
+    print(f'\n{"❌ failures:" + str(bad) if bad else "✅ all reassembled under threshold"}')
     return 1 if bad else 0
 
 
