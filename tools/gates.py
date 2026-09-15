@@ -10,15 +10,38 @@ from strings import scan
 # а не в домашнем каталоге автора; переопределяется переменной `WW_JUICE`.
 JUICE = pathlib.Path(os.environ.get('WW_JUICE') or
                      pathlib.Path(__file__).resolve().parent / 'juice/mes/juice.rkt')
+
+# ⚠️ Базовый образ -- ОДНА точка на весь конвейер. Раньше путь был скопирован в шесть мест
+# (make_patch, build_qa_image, build_play, verify ×2, titlemenu), и это не гипотетический
+# вред: `game/WordsWorth.hdi` втихую разошёлся с образом, объявленным в README v1.0, на
+# 21 байт -- кто-то из прогонов записал в него слот. Против него и считались все `md5_before`.
+#
+# С 2026-09-15 база -- дамп Neo Kobe (CRC32 8AE7E6F1): именно его люди скачивают, и на него
+# жаловались на gbatemp. Замер, на котором это решение стоит: из трёх наших образов (рабочий,
+# набор v1.0, Neo Kobe) все 906 файлов игры ПОБАЙТОВО ОДИНАКОВЫ, расходится только `FLAG0` --
+# слот сохранения. Поэтому смена базы не меняет ни одной дельты, а пофайловый патч ложится на
+# любой из трёх. Переопределяется `WW_BASE`.
+BASE = pathlib.Path(os.environ.get('WW_BASE') or
+                    pathlib.Path(__file__).resolve().parent.parent /
+                    'game/base/WordsWorth_neokobe.hdi')
 # The allowed set is whatever charset "english" actually maps -- read it from
 # juice rather than assuming printable ASCII. Notably it has no backslash and no
 # tilde, and a stray "\" makes the compiled file unparseable (SENTO0A).
 _CHARSET = pathlib.Path(__file__).resolve().parent / 'juice/mes/charset/_charset_english.rkt'
+# ⚠️ Запасной вариант -- НЕ «печатный ASCII на глазок». У корректора juice не стоит и не
+# должен: вычитка -- это правка текста, а не сборка игры. Поэтому набор знаков заморожен в
+# `tools/charset_english.json` (208 знаков, снято из juice) и едет вместе с инструментами.
+# Без него проверка кодировки у корректора врала бы в обе стороны.
 try:
     ALLOWED = {ord(c) for c in re.findall(r'#\\(.)', _CHARSET.read_text(encoding='utf-8'))}
     ALLOWED |= {0x20}
 except OSError:
-    ALLOWED = set(range(0x20, 0x7f)) | {0xa5, 0xaf}
+    import json as _json
+    _frozen = pathlib.Path(__file__).resolve().parent / 'charset_english.json'
+    try:
+        ALLOWED = set(_json.loads(_frozen.read_text(encoding='utf-8')))
+    except OSError:
+        ALLOWED = set(range(0x20, 0x7f)) | {0xa5, 0xaf}
 
 def gate_count(ja_list, en_list):
     if len(ja_list) != len(en_list):
@@ -36,9 +59,18 @@ def gate_emptied(ja_list, en_list):
 
 
 def gate_charset(en_list):
+    """Characters the game's own font cannot draw.
+
+    ⚠️ '\\n' is NOT such a character, and treating it as one was a real bug. In the batch
+    translator a line never contains one, so nothing showed -- but export_text.py writes a
+    reply's internal line break as '\\n', and that made this gate reject every multi-line
+    reply, INCLUDING lines already shipped in the game. Found 2026-09-15 on a frame sent by
+    the player: the one correct fix for it was refused, and 16 more in FLOOR05 with it.
+    The break is our own separator between the form's slots, not a glyph.
+    """
     bad = []
     for i, s in enumerate(en_list):
-        for ch in s:
+        for ch in s.replace('\n', ''):
             if ord(ch) not in ALLOWED:
                 bad.append((i, ch))
                 break

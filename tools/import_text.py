@@ -27,8 +27,10 @@ import hashlib
 import json
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'tools'))
@@ -75,11 +77,23 @@ def main(apply):
                 continue
             f = fs[i]
             old = unescape(f['ja'])
+            new = row['en']
+            # ⚠️ Сперва «правил ли корректор эту строку», и только потом отпечаток. Обратный
+            # порядок делал импорт хрупким до бесполезности: `battlefix.py` поправил 45
+            # боевых реплик ПОСЛЕ выгрузки, и каждая из них -- корректором НЕ тронутая --
+            # давала «исходная строка изменилась», а правило «не прошла одна -- не пишется
+            # ничего» роняло весь импорт из-за чужих файлов.
+            #
+            # ⚠️⚠️ Признак «не правил» -- отпечаток `was` сходится с САМИМ `en`, а не с
+            # текущим исходником. Первая попытка сравнивала `new` с `old` (то есть с
+            # текущим `en/`), но это ровно то же сравнение, что и ниже, только другими
+            # словами: устаревшая запись отличается от исходника именно потому, что
+            # исходник уехал. `was` -- отпечаток на момент выгрузки, и он единственный
+            # знает, что корректор видел перед собой.
+            if hashlib.blake2b(new.encode(), digest_size=4).hexdigest() == row['was']:
+                continue                      # запись не правлена -- нечего и сверять
             if hashlib.blake2b(old.encode(), digest_size=4).hexdigest() != row['was']:
                 problems.append(f'{row["id"]}: исходная строка изменилась после выгрузки')
-                continue
-            new = row['en']
-            if new == old:
                 continue
             bad = check(old, new, cols.get(f['start'], 0))
             if bad:
@@ -98,9 +112,18 @@ def main(apply):
             print(f'      было : {old[:66]}')
             print(f'      стало: {new[:66]}')
     if problems:
+        # ⚠️ Показывать 12 из 46 нельзя: по такому отчёту не починишь -- 2026-09-15 за
+        # усечением спрятались 34 претензии, и разбирать пришлось отдельным скриптом.
+        # Группируем по ПРИЧИНЕ, с примерами: причин мало, а строк много.
+        kinds = {}
+        for p in problems:
+            kind = p.split(': ', 1)[1] if ': ' in p else p
+            kind = re.sub(r'\[.*?\]', '[…]', kind)
+            kinds.setdefault(kind, []).append(p.split(':')[0])
         print(f'\n❌ не прошли проверку: {len(problems)}')
-        for p in problems[:12]:
-            print(f'   {p}')
+        for kind, ids in sorted(kinds.items(), key=lambda x: -len(x[1])):
+            print(f'   {len(ids):4d}  {kind}')
+            print(f'         {", ".join(ids[:8])}{" …" if len(ids) > 8 else ""}')
         sys.exit('\nНИЧЕГО НЕ ЗАПИСАНО: сначала исправить перечисленное')
     if not changes:
         print('правок нет')
@@ -109,20 +132,42 @@ def main(apply):
     if not apply:
         print('\nНЕ ЗАПИСАНО. Применить: tools/import_text.py --apply')
         return
+    # ⚠️ Сборка ИДЁТ В СТОРОНЕ, и только сошедшееся переезжает в en/. Прежняя версия писала
+    # сразу, компилировала на месте и ПОТОМ печатала «⚠️ ЗА ПОРОГОМ» — то есть сообщала о
+    # беде, которую уже устроила. Файл за порогом убивает игру при заходе в комнату (§30),
+    # и узнавать об этом постфактум нельзя.
+    tmp = pathlib.Path(tempfile.mkdtemp(prefix='import.'))
+    built, over = {}, []
     for name, rows in changes.items():
         src = (EN / f'{name}.rkt').read_text(encoding='utf-8')
         edits = []
         for f, pieces, _, _ in rows:
             for (x, y), piece in zip(f['slots'], pieces):
                 edits.append((x, y, escape(piece)))
-        (EN / f'{name}.rkt').write_text(patch(src, edits), encoding='utf-8')
+        (tmp / f'{name}.rkt').write_text(patch(src, edits), encoding='utf-8')
         subprocess.run(['racket', str(ROOT / 'tools/juice/mes/juice.rkt'), '-cf',
-                        f'{name}.rkt'], cwd=EN, capture_output=True, timeout=900)
-        mes = EN / f'{name}.rkt.mes'
+                        f'{name}.rkt'], cwd=tmp, capture_output=True, timeout=900)
+        mes = tmp / f'{name}.rkt.mes'
         size = mes.stat().st_size if mes.exists() else 0
-        over = ' ⚠️ ЗА ПОРОГОМ' if size > gates.MES_MAX else ''
-        print(f'  {name:16} записан, {size} б{over}')
-    print('\n⚠️ дальше обязательно: tools/verify.py и приёмка запуском')
+        was = (EN / f'{name}.rkt.mes').stat().st_size
+        if not size:
+            over.append(f'{name}: не скомпилировался')
+        elif size > gates.MES_MAX:
+            over.append(f'{name}: {size} б, за порогом {gates.MES_MAX} (было {was})')
+        built[name] = (size, was)
+        print(f'  {name:16} {was} -> {size} б')
+    if over:
+        print(f'\n❌ не прошли по размеру: {len(over)}')
+        for o in over:
+            print(f'   {o}')
+        shutil.rmtree(tmp, ignore_errors=True)
+        sys.exit('\nНИЧЕГО НЕ ЗАПИСАНО: сперва ужать или разрезать (tools/split.py)')
+    for name in built:
+        shutil.copyfile(tmp / f'{name}.rkt', EN / f'{name}.rkt')
+        shutil.copyfile(tmp / f'{name}.rkt.mes', EN / f'{name}.rkt.mes')
+    shutil.rmtree(tmp, ignore_errors=True)
+    print(f'\nзаписано файлов: {len(built)}')
+    print('⚠️ дальше обязательно: tools/verify.py и приёмка запуском')
 
 
 if __name__ == '__main__':

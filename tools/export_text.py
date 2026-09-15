@@ -23,6 +23,7 @@
 import hashlib
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -33,6 +34,7 @@ import column                                                       # noqa: E402
 
 EN = ROOT / 'en'
 OUT = ROOT / 'text'
+MARK = re.compile(r'\{(\d+)\}')
 
 
 def export(name):
@@ -48,6 +50,11 @@ def export(name):
             'id': f'{name}#{i}',
             'en': en,
             'was': hashlib.blake2b(en.encode(), digest_size=4).hexdigest(),
+            # ⚠️ Маркеры исходной строки едут ОТДЕЛЬНЫМ полем: без них проверка у корректора
+            # не может сказать, что `{0}` потерялся -- сравнивать не с чем, кроме отпечатка,
+            # а он говорит только «изменено», но не «чем именно».
+            'marks': MARK.findall(en),
+            'col': c0,
             'screen': screen(parts_of(en), w=None, col0=c0),
         })
     return rows

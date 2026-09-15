@@ -19,9 +19,10 @@ import hashlib, json, os, pathlib, shutil, subprocess, sys, tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import hdimage
+import gates
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SRC = ROOT / 'game/WordsWorth.hdi'          # нетронутый оригинал
+SRC = gates.BASE                            # нетронутый оригинал (gates.BASE)
 # Переведённый образ. Аргументом можно указать другой -- например собранный рядом,
 # пока рабочий занят запущенным агентом.
 DST = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / 'game/WordsWorth_qa.hdi'

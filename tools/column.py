@@ -146,7 +146,15 @@ def _walk(src, a, e, col, out, on_print=None):
         # героя или противника. Считаем такую от ширины имени -- иначе три реплики
         # («… attacked, trying to engulf …», «… swung their swords …») вылезают за окно и
         # рвутся посередине слова.
-        _chain(src, a + 1 + len(h), e - 1, NAME if _continues(src, a, e) else 0,
+        #
+        # ⚠️⚠️ Ширина имени -- НЕ константа `NAME = 6`. В бою имя печатает `proc 41` из той же
+        # группы объявлений, и это имя ПРОТИВНИКА: от «Delta» (5) до «A Suspicious Woman»
+        # (18). Замер трёх моделей (`procwidth2.py`): `proc` = 0 находил 19 случаев брака,
+        # «имя своей ветки» -- 85, «максимум по файлу» -- 131. Первая слепа, третья сужает
+        # текст зря; верна вторая, потому что `(define-proc 41 (text "Light Knight"))` стоит
+        # рядом с `(define-proc 42 (text " raised their sword!!"))` -- ширина известна точно.
+        _chain(src, a + 1 + len(h), e - 1,
+               _name_width(src, a) if _continues(src, a, e) else 0,
                out, on_print)
         return col
     if h in SEQ:
@@ -158,6 +166,27 @@ def _continues(src, a, e):
     """Тело процедуры начинается с пробела -- значит продолжает напечатанное имя."""
     fs = forms(src[a:e])
     return bool(fs) and unescape(fs[0]['ja']).startswith(' ')
+
+
+_NAMEPROC = re.compile(r'\(define-proc 41\b')
+
+
+def _name_width(src, a):
+    """Ширина имени, которое напечатают ПЕРЕД этим телом процедуры.
+
+    Имя объявляет `(define-proc 41 (text "…"))` в той же группе, поэтому берётся ближайшее
+    ТАКОЕ объявление ВЫШЕ по файлу. Нет его (обычная сцена, а не бой) -- значит имя подставит
+    движок из сохранения, и это `NAME` знаков.
+    """
+    best = None
+    for m in _NAMEPROC.finditer(src, 0, a):
+        best = m.start()
+    if best is None:
+        return NAME
+    fs = forms(src[best:close(src, best) + 1])
+    if not fs:
+        return NAME
+    return max(NAME, len(unescape(fs[0]['ja'])))
 
 
 _NUM = re.compile(r'\d+')
