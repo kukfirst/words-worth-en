@@ -11,9 +11,9 @@ gameplay and polygon dungeons — and that patch is itself partial.
 
 | | |
 |---|---|
-| **Download** | [`dist/words-worth-en-v1-0.zip`](dist/words-worth-en-v1-0.zip) — one xdelta patch and a readme |
-| Applies to | `Words Worth.hdi` — 20 955 136 bytes, CRC32 `AE44FCDD`, SHA-1 `d6133fdd5b33a1656e3d24f4026f4be58ee7c630` |
-| Produces | CRC32 `A3F44833`, SHA-1 `29571812ac8e58e64ffffdab4573d91ce507033f`, with all five save slots empty |
+| **Download** | [`dist/words-worth-en-v1-1.zip`](dist/words-worth-en-v1-1.zip) — one xdelta patch and a readme |
+| Applies to | `Words Worth.hdi` — 20 955 136 bytes, CRC32 `8AE7E6F1`, MD5 `6b3855cece879cbba2ae9bded06deef1` (the Neo Kobe copy) |
+| Produces | CRC32 `646EA627`, SHA-1 `bc2b15740785e609056d44695d8f2df64d99679c`, with all five save slots empty |
 | Emulator | Neko Project II kai (np2kai), standalone or the libretro core |
 
 Also on [GBAtemp](https://gbatemp.net/download/pc-98-words-worth-english-patch.40017/).
@@ -22,9 +22,17 @@ Also on [GBAtemp](https://gbatemp.net/download/pc-98-words-worth-english-patch.4
 non-consensual, and the attitudes that came with early-90s eroge. Everything is translated
 plainly — nothing is censored or softened. 18+.
 
-![title screen](screenshots/01-title-menu.png)
-![dialogue](screenshots/04-dialogue.png)
+> **v1.0 could crash to the DOS prompt and is superseded.** Ten scripts had outgrown the
+> engine's script buffer; the second Silvanna scene on floor 2 killed the game reliably.
+> Fixed in v1.1 by splitting each oversized script into a parent plus a companion file —
+> the way the game already does it for its own rooms — with no wording changed.
+> v1.1 also corrects 45 battle lines that named the attacker where the engine prints the
+> target, re-wraps 111 lines that broke mid-word, and carries a 367-fix proofreading pass.
+
+![dialogue](screenshots/02-dialogue.png)
 ![battle](screenshots/03-battle.png)
+![the story](screenshots/07-story.png)
+![a shop](screenshots/05-shop.png)
 
 ---
 
@@ -43,6 +51,23 @@ the game, or the game's text:
 file set from the import graph rather than from a hand-written list, and then refuses by file
 extension anything that looks like game data. A list written by hand goes stale silently; a
 computed one does not.
+
+## What this project actually was
+
+Before anything else, this was a research question: can a **local** model and a **cloud**
+model, working as a pair, carry a job like this all the way to something shippable? Not a
+demo — a finished patch that survives being played by a stranger.
+
+The division of labour turned out to matter more than either model. The local one
+(Qwen3.8-27B, on one machine, nothing sent anywhere) translated: it proposes a batch of
+lines, and that is all it ever does. The cloud one built the machinery around it — the
+decompiler harness, the gates, the layout simulator, the emulator rig — and, more usefully,
+kept asking what the gates were *not* catching. Every defect a human player found became a
+new automated check, so that class could not come back silently.
+
+That is the finding, and it flatters neither model alone: neither could have finished this.
+The local one cannot judge its own output. The cloud one cannot be handed 22 010 lines of
+someone else's copyrighted text. Paired, with code as the referee between them, it works.
 
 ## The translation method
 
@@ -72,51 +97,39 @@ at, which is not zero whenever the engine has just printed a name or a direction
 The simulation is checked against real captured emulator frames (`tools/screenqa.py` reads the
 text back off the pixels), because a model of the engine that nobody checks is just a belief.
 
-**The build is verified by running it.** `emu/battle_probe.py` boots the patched image in the
-emulator, walks until a random encounter happens and reports whether the game survived the
-fight. Compiling is necessary and nowhere near sufficient: a change that merely *added* an
-instruction once passed every static gate and killed the game on scene load.
+**The build is verified by running it.** `tools/acceptance.sh` boots the patched image, walks
+every split floor, replays the scene that used to crash, and visits the shops — judging life
+or death by the **screen**, because a game that has exited to DOS leaves its memory intact and
+will keep reporting the scene as resident. When a scene does die, the same run repeats it on
+the untouched Japanese image: a room that dies there too is unreachable by teleport, not a
+defect of ours. Compiling is necessary and nowhere near sufficient — a change that merely
+*added* an instruction once passed every static gate and killed the game on scene load.
+
+**One check needs the Japanese original, and no per-batch gate can do it.** `tools/audit.py`
+runs the whole gate battery over the finished script rather than over a batch, because after
+translation the text is edited four more times by four more tools. That is what caught the
+45 reversed battle lines — the instruction skeleton was identical, the width was fine, every
+static gate was green, and the sentence said the opposite of what happened.
 
 Numbers, defects found and the reasoning behind each decision are in the working log, not here.
 
 ## Proofreading
 
-If you were sent a copy of this tree as an archive, it contains a `text/` directory that is
-**not** in the public repository. That is the whole English script, flattened for reading:
-one entry per line, with the line as it will actually land in the game's 56-column window.
+**[→ PROOFREADING.md](PROOFREADING.md)** — the whole guide, start there.
 
-```json
-{
- "id": "FLOOR02.MES#41",
- "en": "[{0}]: My, my head's spinning... Someone cast a\nspell on me.",
- "was": "fd514727",
- "screen": ["[xxxxxx]: My, my head's spinning... Someone cast a",
-            "spell on me."]
-}
-```
-
-`screen` is produced by a model of elf's compiler and of the engine's message window, checked
-against real captured frames — so a broken line break is visible without running the game.
-`xxxxxx` stands for the hero's name, which the engine substitutes at runtime.
-
-**To proofread:** edit the `en` fields. Leave `id` and `was` alone — `was` is a fingerprint of
-the line you started from, and it is what proves you edited the line you meant to. Then:
+Short version: you need Python and a text editor, nothing else. Clone this repository, unzip
+the `text/` folder you were sent into it, edit the `en` fields, and run:
 
 ```sh
-python3 tools/import_text.py            # show what changed, and what was refused
-python3 tools/import_text.py --apply    # write it back and recompile
-python3 tools/export_text.py            # regenerate text/ from the current scripts
+python3 tools/check.py
 ```
 
-Every changed line is checked before anything is written: the `{0}` markers must survive
-unchanged, the characters must exist in the game's own character set, the line must still fit
-the window without breaking a word, the fingerprint must match, and the recompiled script must
-stay under the engine's buffer. **If any line fails, nothing is written at all** — half of an
-accepted proofread is worse than none, because afterwards you cannot tell what landed.
+It writes nothing. It reads your edits and tells you, in plain English, what the game would
+refuse and why — a lost `{0}` marker, a character the game's font cannot draw, a line that
+will not fit the 56-column window. Fix, re-run, send `text/` back.
 
-⚠️ `text/` is deliberately absent from the repository and listed in `.gitignore`: it is the
-game's text, and the reason this scene distributes patches rather than scripts. Please keep it
-out of public places.
+⚠️ `text/` is deliberately absent from this repository and listed in `.gitignore`: it is the
+game's full script, and the reason this scene distributes patches rather than scripts.
 
 ## Requirements
 

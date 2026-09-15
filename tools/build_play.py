@@ -30,6 +30,7 @@
 import functools, hashlib, json, pathlib, shutil, subprocess, sys, tempfile, os
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import hdimage
+import gates
 from savenames import latinise, is_latin, NAME_SLOTS
 
 # печать без буфера: иначе строки родителя выезжают после вывода apply_patch
@@ -122,7 +123,7 @@ def holders(path):
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     fresh = '--fresh' in sys.argv[1:]
-    src = pathlib.Path(args[0] if len(args) > 0 else ROOT / 'game/WordsWorth.hdi').resolve()
+    src = pathlib.Path(args[0] if len(args) > 0 else gates.BASE).resolve()
     out = pathlib.Path(args[1] if len(args) > 1 else ROOT / 'game/WordsWorth_play.hdi').resolve()
     cfgf = DIST / 'patch.json'
 

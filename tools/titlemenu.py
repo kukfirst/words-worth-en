@@ -30,6 +30,7 @@ from PIL import Image
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'tools'))
 import hdimage                                                       # noqa: E402
+import gates                                                         # noqa: E402
 
 GP4 = ROOT / 'tools/juice/gp4/gp4.rkt'
 FONT = ROOT / 'emu/system/np2kai/font.bmp'   # np2kai: ANK 8x16, символ c в x = c*8, y 0..15
@@ -114,7 +115,7 @@ def original_gp4(dest):
     """ELFANN.GP4 из НЕТРОНУТОГО образа -- никогда из уже переведённого."""
     d = pathlib.Path(tempfile.mkdtemp(prefix='wwtitle.'))
     cfg = d / 'mtoolsrc'
-    hdimage.mtoolsrc(ROOT / 'game/WordsWorth.hdi', cfg)
+    hdimage.mtoolsrc(gates.BASE, cfg)
     env = os.environ | {'MTOOLSRC': str(cfg), 'MTOOLS_SKIP_CHECK': '1'}
     subprocess.run(['mcopy', '-o', 'z:/WW/ELFANN.GP4', str(dest)], env=env, check=True,
                    capture_output=True)

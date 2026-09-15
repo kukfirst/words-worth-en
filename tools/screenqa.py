@@ -81,6 +81,15 @@ def scan(since=None):
         if key in seen:
             continue
         seen.add(key)
+        # ⚠️ Кадр без окна сообщения -- это ИЛЛЮСТРАЦИЯ на весь экран, и её пиксели в
+        # области окна читаются как мусор: «дыра в строке», «слово разорвано». Замер
+        # 2026-09-15: оба «брака раскладки» из 289 экранов оказались такими картинками.
+        # Признак: почти всё нечитаемо. Настоящая реплика состоит из знаков, которые
+        # читатель знает; картинка -- из тех, которых нет ни в одном эталоне.
+        txt = ''.join(lines)
+        ink = [c for c in txt if c != ' ']
+        if ink and sum(c == textbox.UNKNOWN for c in ink) / len(ink) > 0.5:
+            continue
         bad, unread = defects(lines, textbox.COLS)
         if not bad and not unread:
             continue

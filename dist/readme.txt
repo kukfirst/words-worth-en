@@ -1,5 +1,5 @@
 Words Worth (elf, PC-98, 1993) - English translation
-V 1.0 - 13/09/26
+V 1.1 - 15/09/26
 
 Words Worth is elf's first-person dungeon RPG from 1993, set in a world split between the
 Light Clan and the Shadow Clan, each convinced the other has been lying about the same stone
@@ -25,17 +25,22 @@ you are under 18.
 HOW TO
 Apply the xdelta patch to the Japanese hard-disk image:
 
-    Words Worth.hdi     CRC32 AE44FCDD     20,955,136 bytes
-                        MD5   3b240225ff7cd955f8fd9515b41227f2
+    Words Worth.hdi     CRC32 8AE7E6F1     20,955,136 bytes
+                        MD5   6b3855cece879cbba2ae9bded06deef1
 
-This is the file as it ships in the widely circulated PC-98 collection. On Windows, drop the
-image and the patch onto xdelta UI. On Linux or macOS:
+This is the Neo Kobe copy - the one most people actually have. v1.0 was built against a
+different dump of the same game; the two differ by 149 bytes, all of them inside a save slot,
+and every one of the 906 game files is byte-identical. If your image is that other dump the
+patch still produces a working game, but the checksum above is the one this release was built
+and tested against.
 
-    xdelta3 -d -s "Words Worth.hdi" words-worth-en-v1-0.xdelta "Words Worth (EN).hdi"
+On Windows, drop the image and the patch onto xdelta UI. On Linux or macOS:
+
+    xdelta3 -d -s "Words Worth.hdi" words-worth-en-v1-1.xdelta "Words Worth (EN).hdi"
 
 The result is:
 
-    Words Worth (EN).hdi  CRC32 A3F44833  MD5 549833dce7d39fe81c3e9dbc1e5bf06f
+    Words Worth (EN).hdi  CRC32 646EA627  MD5 a863bb9533cd753584c229d92d6d5472
 
 Patch a FRESH image, not one you have played. The five save slots carry the hero's name, which
 the engine substitutes into dialogue at runtime, so the patch has to rewrite those fields -
@@ -56,13 +61,24 @@ WHAT IS AND IS NOT TRANSLATED
   in the Japanese original, printed by the game itself, not translation errors. They are left
   exactly as the authors wrote them.
 
+WHAT CHANGED IN 1.1
+- A crash is fixed. In v1.0 the game could drop to the DOS prompt - the second Silvanna
+  scene on floor 2 did it reliably. Ten scripts had grown past the engine's script buffer;
+  each is now split into a parent plus a companion file, exactly the way the game already
+  does it for its own rooms. No wording was changed to achieve this.
+- 45 battle lines said the wrong thing. The engine prints the name of whoever RECEIVES a
+  blow, and the English read "X dealt 12 damage" where it should read "X took 12 damage" -
+  the most frequent line in the game, one per hit. Now correct in all 23 files.
+- Battle lines no longer break mid-word. The enemy's name is printed before the sentence
+  fragment, and the line layout now accounts for its real width (from "Delta" to "A
+  Suspicious Woman") instead of assuming six characters. 111 lines were re-wrapped.
+- 367 proofreading fixes across 74 files - missing nouns after group names ("took out some
+  Light Clan" -> "...Light Clan members"), wrong articles, dead-literal phrasing.
+
 KNOWN ISSUES
-- Battle lines are assembled at runtime from the enemy's name plus a sentence fragment, and
-  the engine wraps at the edge of the window without caring where a word ends. Against
-  long-named enemies a line can still break mid-word. The text is readable, it just looks
-  untidy. This is the known defect for v1.1.
 - Line breaks are laid out for a six-character hero name (the defaults are Astral and Pollux).
   A much longer name shifts the wrapping.
+- The text has had one proofreading pass. If a line still reads wrong, post it.
 
 ABOUT THE TRANSLATION
 Play a few screens before you read the next section, because the text is the argument and the
