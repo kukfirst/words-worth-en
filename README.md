@@ -113,6 +113,35 @@ static gate was green, and the sentence said the opposite of what happened.
 
 Numbers, defects found and the reasoning behind each decision are in the working log, not here.
 
+## Playing it in the cockpit
+
+**[→ emu/COCKPIT.md](emu/COCKPIT.md)** — install, run, and everything it does.
+
+The repository also carries the cockpit the patch was built and played in: the game runs in the
+np2kai libretro core in its own process, and a page on `127.0.0.1` is the screen, the controls
+and the instruments.
+
+```sh
+python3 -m venv emu/.venv && emu/.venv/bin/pip install "libretro.py" numpy pillow
+WW_DISK=/path/to/your/patched.hdi WW_SYSTEM=/path/to/your/np2kai emu/play.sh
+```
+
+| | |
+|---|---|
+| Picture | eight WebGL2 filters — sharp pixels, scanlines, two CRTs, a Trinitron aperture grille, an LCD grid, amber phosphor — plus aspect and integer scaling |
+| Speed | ×1 (56.4 fps, the PC-98's own rate), ×2, ×4, MAX, and turbo while `Tab` is held. Key presses are counted in frames, so a tap is one tap at every speed |
+| Mouse | absolute: the cockpit reads where the game's cursor is and drives it to where you point. Pointer-lock capture is there if you prefer relative |
+| Instruments | inventory, the floor map drawn from the game's own data, save snapshots with thumbnails, and the line the message window is showing |
+| Autobattle | walks the floor and fights on its own; stops on low HP, on a screen that eats input, or the instant you touch a control |
+| Proofreading | the line on screen, matched to your `text/` pack, editable in place — [emu/PROOFREADER.md](emu/PROOFREADER.md) |
+
+You need your own patched image and your own PC-98 BIOS: neither is here, and the BIOS never
+will be. `emu/play_accept.py` checks the whole thing on your machine by running it — twenty-one
+checks, including killing the emulator mid-game to see it come back.
+
+⚠️ The cockpit listens on `127.0.0.1` and has no authentication. It is one person's cockpit on
+one machine — do not expose the port.
+
 ## Proofreading
 
 **[→ PROOFREADING.md](PROOFREADING.md)** — the whole guide, start there.
@@ -139,7 +168,7 @@ game's full script, and the reason this scene distributes patches rather than sc
 | Racket | plus `ansi-color`, `bitsyntax`, `parsack` — `make juice` installs them |
 | `mtools` | reads and writes the FAT partition inside the disk image |
 | `xdelta3` | builds and applies the per-file deltas |
-| emulator | `np2kai` libretro core + [`libretro.py`](https://pypi.org/project/libretro.py/) in a venv, for the verification harness |
+| emulator | `np2kai` libretro core + [`libretro.py`](https://pypi.org/project/libretro.py/) in a venv — for the verification harness and for the cockpit ([emu/COCKPIT.md](emu/COCKPIT.md)); the PC-98 BIOS is yours to supply and is not here |
 | a model | any OpenAI-compatible endpoint; set `WW_LLM_URL` and `WW_LLM_MODEL` |
 
 ```sh

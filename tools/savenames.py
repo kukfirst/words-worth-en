@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Hero names inside the save slot.
 
-Character names live NOT in the scripts but in the save: `アストラル` (Astral) and
-`ポルックス` (Pollux) don't occur in a single .mes -- neither Japanese nor translated --
-they live in `FLAG0..FLAG4` instead, five slots of 3072 b each (the very ロード1..ロード5
-of the title menu). The engine substitutes the name into a line at runtime, so katakana
+The hero's names live NOT in the scripts but in the save. It is ONE man with two names --
+`アストラル` (Astral) in the first half, `ポルックス` (Pollux) once he is named in the second
+(emu/state.py hero()) -- so there are two fields. Neither name occurs in a single .mes,
+Japanese or translated: they live in `FLAG0..FLAG4` instead, five slots of 3072 b each
+(the very ロード1..ロード5 of the title menu). The engine substitutes the name into a line at runtime, so katakana
 shows up in the English text, and no amount of editing the translation fixes that.
 
 Hence the reason this module exists: a save slot can't simply be taken ready-made from the

@@ -53,5 +53,11 @@ def main(agent_path):
     return 1 if bad else 0
 
 
+# Every script that holds a LIVE game: the QA agent, and since 2026-09-16 the play cockpit.
+LIVE = ('agent.py', 'play.py')
+
+
 if __name__ == '__main__':
-    sys.exit(main(sys.argv[1] if len(sys.argv) > 1 else EMU / 'agent.py'))
+    if len(sys.argv) > 1:
+        sys.exit(main(sys.argv[1]))
+    sys.exit(max(main(EMU / name) for name in LIVE))

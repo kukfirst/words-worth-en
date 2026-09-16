@@ -1,0 +1,575 @@
+:root {
+  --bg: #05070b;
+  --bg2: #0a0f17;
+  --panel: rgba(12, 18, 28, 0.82);
+  --panel2: rgba(18, 27, 41, 0.9);
+  --line: #1b2a3c;
+  --line2: #27405a;
+  --text: #d6e4f0;
+  --dim: #6f8498;
+  --cyan: #3fe6ff;
+  --cyan2: #1aa7c4;
+  --amber: #ffb547;
+  --red: #ff4d61;
+  --green: #4cf0a2;
+  --violet: #b98cff;
+  --ui: 'Chakra Petch', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'VT323', 'DejaVu Sans Mono', ui-monospace, monospace;
+  --rail: clamp(272px, 23vw, 360px);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.35 var(--ui);
+  overflow: hidden;
+}
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(1200px 700px at 30% 40%, rgba(40, 90, 140, 0.16), transparent 70%),
+    radial-gradient(900px 600px at 85% 10%, rgba(255, 170, 70, 0.07), transparent 70%),
+    repeating-linear-gradient(0deg, rgba(63, 230, 255, 0.025) 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(90deg, rgba(63, 230, 255, 0.025) 0 1px, transparent 1px 32px),
+    var(--bg);
+}
+button, select, input { font: inherit; color: inherit; }
+button {
+  background: var(--panel2);
+  border: 1px solid var(--line2);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+button:hover { border-color: var(--cyan2); box-shadow: 0 0 10px rgba(63, 230, 255, .18); }
+button.on, .seg button.on {
+  background: linear-gradient(180deg, rgba(63, 230, 255, .28), rgba(63, 230, 255, .1));
+  border-color: var(--cyan);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(63, 230, 255, .35), inset 0 0 8px rgba(63, 230, 255, .2);
+}
+button.warn { border-color: #5a2a33; }
+button.warn:hover { border-color: var(--red); box-shadow: 0 0 10px rgba(255, 77, 97, .3); }
+button.arm { background: rgba(255, 77, 97, .25); border-color: var(--red); color: #fff; }
+button.icon { padding: 4px 9px; min-width: 34px; }
+select {
+  background: var(--panel2);
+  border: 1px solid var(--line2);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+input[type=range] { accent-color: var(--cyan); width: 90px; }
+.dim { color: var(--dim); }
+.k { color: var(--dim); font-size: 11px; letter-spacing: .14em; }
+
+/* ---- header ---- */
+.top {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(10, 16, 26, .95), rgba(8, 12, 20, .7));
+  flex: 0 0 auto;
+}
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.sigil { color: var(--amber); font-size: 20px; text-shadow: 0 0 12px rgba(255, 181, 71, .8); }
+.title { font-weight: 700; letter-spacing: .28em; font-size: 16px; }
+.sub { color: var(--dim); font-size: 11px; letter-spacing: .2em; }
+.where { margin-left: 12px; font-size: 13px; }
+#scene-tag { font-family: var(--mono); font-size: 20px; color: var(--amber); letter-spacing: .05em; }
+.leds { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.led {
+  font-size: 11px;
+  letter-spacing: .14em;
+  padding: 2px 8px 2px 18px;
+  border: 1px solid var(--line2);
+  border-radius: 20px;
+  position: relative;
+  color: var(--dim);
+}
+.led::before {
+  content: '';
+  position: absolute;
+  left: 7px; top: 50%;
+  width: 6px; height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: #33404d;
+}
+.led.ok { color: var(--text); }
+.led.ok::before { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.led.warn::before { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.led.bad { color: #fff; border-color: var(--red); }
+.led.bad::before { background: var(--red); box-shadow: 0 0 10px var(--red); animation: blink 1s infinite; }
+.readout { font-family: var(--mono); font-size: 19px; color: var(--cyan); min-width: 62px; text-align: right; }
+@keyframes blink { 50% { opacity: .25; } }
+
+/* ---- layout ---- */
+main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--rail);
+  gap: 14px;
+  padding: 12px 14px 12px 14px;
+}
+.deck { display: flex; flex-direction: column; min-width: 0; min-height: 0; gap: 10px; }
+.stage {
+  flex: 1 1 auto;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.bezel {
+  position: relative;
+  padding: 14px;
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, #1a222e, #0b1017 55%, #141b25);
+  box-shadow:
+    0 0 0 1px #243244,
+    0 20px 60px rgba(0, 0, 0, .7),
+    0 0 80px rgba(63, 230, 255, .08),
+    inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+.bezel::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 14px;
+  border: 1px solid rgba(63, 230, 255, .08);
+  pointer-events: none;
+}
+#screen {
+  display: block;
+  background: #000;
+  border-radius: 6px;
+  cursor: crosshair;
+  image-rendering: auto;
+}
+#app.capture #screen { cursor: none; }
+
+/* ---- control bar ----
+   ⚠️ ONE row, never two. This bar used to wrap: at 1366px it stood four rows and 165px tall,
+   and merely changing the autobattle label from "Autobattle" to "Stop autobattle" re-wrapped it
+   and moved the game picture. `nowrap` makes every change here horizontal, and horizontal
+   changes cannot resize the stage. What does not fit scrolls sideways. */
+.ctlbar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px 14px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.ctlbar::-webkit-scrollbar { display: none; }
+.group { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+/* the autobattle group is the one that gives way: its status text takes the leftover room and
+   collapses to nothing when there is none, instead of pushing the buttons off the edge */
+.group.grind { flex: 1 1 auto; min-width: 0; }
+.group.grind .chk { flex: 0 0 auto; }
+.group.push { margin-left: auto; padding-left: 4px; }
+.grow { flex: 1 1 auto; min-width: 0; }
+#filter { max-width: 140px; }
+#btn-grind { min-width: 126px; }            /* the label flips to "Stop autobattle" */
+.lbl { font-size: 10px; letter-spacing: .2em; color: var(--dim); }
+.seg { display: flex; }
+.seg button { border-radius: 0; margin-left: -1px; padding: 4px 10px; }
+.seg button:first-child { border-radius: 6px 0 0 6px; }
+.seg button:last-child { border-radius: 0 6px 6px 0; }
+.chk { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--dim); }
+.chk input[type=number] {
+  width: 48px; background: var(--panel2); border: 1px solid var(--line2);
+  border-radius: 5px; padding: 2px 4px; font-family: var(--mono); font-size: 15px;
+}
+#grind-info { font-size: 11px; flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- overlays that settings and lists open into ----
+   They are out of flow on purpose: a panel that pushes the layout around is the whole defect
+   this page had. Nothing in a .pop can move anything. */
+.pophost { position: relative; flex: 0 0 auto; display: flex; align-items: center; }
+.pop {
+  position: absolute;
+  z-index: 25;
+  right: 0;
+  top: calc(100% + 9px);
+  min-width: 240px;
+  max-width: min(420px, 90vw);
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+  padding: 10px 12px 12px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .65);
+}
+.pop.up { top: auto; bottom: calc(100% + 9px); }
+.pop-h { font-size: 10px; letter-spacing: .2em; color: var(--cyan); margin-bottom: 8px; }
+.pop .prob { font-size: 12px; color: var(--red); margin-top: 4px; }
+.prow {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-top: 8px; font-size: 12px; color: var(--dim);
+}
+.sliders { display: flex; flex-direction: column; gap: 7px; }
+.sliders label {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 11px; color: var(--dim); letter-spacing: .08em;
+}
+.sliders input { width: 130px; }
+
+/* ---- the deck footer ----
+   Every strip below the stage has a FIXED height. The stage is the only thing that flexes, so
+   it can only change when the window does -- not when the game prints a longer message. */
+.padrow { flex: 0 0 auto; display: flex; align-items: center; gap: 14px; padding: 0 4px; height: 42px; }
+.pad {
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  grid-template-rows: repeat(2, 30px);
+  gap: 3px;
+}
+.pad button { padding: 0; font-size: 13px; }
+.pad .u { grid-column: 2; grid-row: 1; }
+.pad .l { grid-column: 1; grid-row: 2; }
+.pad .d { grid-column: 2; grid-row: 2; }
+.pad .r { grid-column: 3; grid-row: 2; }
+.acts { display: flex; gap: 6px; }
+.acts button { font-size: 12px; letter-spacing: .1em; padding: 6px 12px; }
+.pad button.hit, .acts button.hit { background: rgba(255, 181, 71, .3); border-color: var(--amber); }
+.netinfo { margin-left: auto; font-family: var(--mono); font-size: 16px; color: var(--dim); }
+
+/* ---- rail ---- */
+.rail {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line2) transparent;
+}
+.card {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px 12px;
+  transition: opacity .3s;
+}
+.card::before, .card::after {
+  content: '';
+  position: absolute;
+  width: 10px; height: 10px;
+  border-color: var(--cyan2);
+  border-style: solid;
+  opacity: .7;
+}
+.card::before { top: -1px; left: -1px; border-width: 1px 0 0 1px; border-radius: 10px 0 0 0; }
+.card::after { bottom: -1px; right: -1px; border-width: 0 1px 1px 0; border-radius: 0 0 10px 0; }
+.card-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: .2em;
+  color: var(--cyan);
+  margin-bottom: 8px;
+}
+.card-h.sub { margin: 10px 0 6px; color: var(--dim); letter-spacing: .12em; }
+.card-h .dim { letter-spacing: .06em; font-size: 11px; }
+#app.offgame .card.hero, #app.offgame .rail .card:nth-child(2) { opacity: .45; }
+
+.names { display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.names span { font-size: 15px; font-weight: 600; }
+.hp-top { display: flex; justify-content: space-between; align-items: baseline; }
+.big { font-family: var(--mono); font-size: 30px; line-height: 1; }
+.bar { position: relative; }
+.bar.big, .hud-hp .bar {
+  height: 12px;
+  border-radius: 6px;
+  background: #0c141e;
+  border: 1px solid var(--line2);
+  overflow: hidden;
+  padding: 0;
+  margin-top: 4px;
+}
+.bar.big i, .hud-hp .bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #1fcf82, var(--green));
+  box-shadow: 0 0 12px rgba(76, 240, 162, .6);
+  transition: width .35s ease, background .3s;
+}
+.bar i.mid { background: linear-gradient(90deg, #d88a1a, var(--amber)); box-shadow: 0 0 12px rgba(255, 181, 71, .6); }
+.bar i.low { background: linear-gradient(90deg, #b3182c, var(--red)); box-shadow: 0 0 14px rgba(255, 77, 97, .8); animation: blink .9s infinite; }
+.card.hero.hit { animation: hit .5s; }
+.card.hero.heal { animation: heal .6s; }
+@keyframes hit { 0% { box-shadow: 0 0 0 1px var(--red), 0 0 30px rgba(255, 77, 97, .6); } 100% { box-shadow: none; } }
+@keyframes heal { 0% { box-shadow: 0 0 0 1px var(--green), 0 0 30px rgba(76, 240, 162, .5); } 100% { box-shadow: none; } }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin-top: 10px; }
+.stats div { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px dashed var(--line); padding-bottom: 2px; }
+.stats b { font-family: var(--mono); font-size: 22px; font-weight: 400; color: var(--text); }
+.stats .wide { grid-column: span 2; }
+.stats .wide b { color: var(--amber); }
+.flash { animation: flash .8s; }
+@keyframes flash { 0% { color: #fff; text-shadow: 0 0 12px var(--amber); } 100% { text-shadow: none; } }
+
+.items { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(8, 13, 20, .6);
+}
+.item .ic { width: 22px; text-align: center; font-size: 15px; }
+.item .n { flex: 1; font-size: 12px; }
+.item b { font-family: var(--mono); font-size: 22px; font-weight: 400; color: var(--cyan); }
+.item.zero { opacity: .45; }
+.equip { margin-top: 8px; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 13px; }
+.equip .k { align-self: center; }
+
+/* ---- the line on screen, which is also the editor ----
+   One box. It holds the line the game is showing, or the entry that line came from when that
+   entry can be rewritten -- and both are the same element size, so switching between them is
+   invisible. The box is the game's own message window: 56 columns by 4 rows. */
+.textcard { flex: 0 0 auto; padding: 8px 12px 10px; }
+.textcard .card-h { margin-bottom: 6px; justify-content: flex-start; gap: 10px; }
+.tc-title { flex: 0 0 auto; }
+.fold { padding: 1px 6px; min-width: 24px; font-size: 11px; line-height: 1; }
+.alt { font-size: 10px; letter-spacing: .1em; padding: 2px 8px; }
+.why { font-size: 10px; letter-spacing: .1em; padding: 2px 8px; color: var(--amber); border-color: #5a4a2a; }
+.why.hard { color: var(--red); border-color: #5a2a33; }
+/* Save is the one thing in this header you are meant to reach for: it looks like it. */
+.save {
+  min-width: 104px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  padding: 5px 16px;
+  background: linear-gradient(180deg, rgba(63, 230, 255, .3), rgba(63, 230, 255, .12));
+  border-color: var(--cyan);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(63, 230, 255, .25);
+}
+.save:disabled {
+  background: var(--panel2); border-color: var(--line); color: var(--dim);
+  box-shadow: none; cursor: default; font-weight: 400;
+}
+/* ⚠️ Holding is the panel stopping, NOT the game. The page says which, because a frozen panel
+   over a running game looks exactly like a frozen cockpit. */
+.hold { padding: 2px 9px; min-width: 78px; font-size: 11px; letter-spacing: .06em; line-height: 1.3; }
+.hold:disabled { opacity: .4; cursor: default; box-shadow: none; border-color: var(--line); }
+.tc-state { font-size: 11px; letter-spacing: .1em; color: var(--amber); white-space: nowrap; }
+.tc-state.gone { color: var(--red); }
+#app.held .tbox { border-color: var(--amber); box-shadow: 0 0 10px rgba(255, 181, 71, .18); }
+.tbox-wrap { height: 134px; }                /* 4 rows of the window, and it never changes */
+#app.tcfold .tbox-wrap { display: none; }
+.tbox {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: #070b10;
+  border: 1px solid var(--line2);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 24px;              /* the window holds 56 columns; there is room, so use it */
+  line-height: 1.25;
+  letter-spacing: .02em;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+  resize: none;
+}
+.tbox[readonly] { opacity: .8; cursor: default; }
+.tbox::placeholder { color: var(--dim); font-style: italic; opacity: 1; }
+.tbox:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 10px rgba(63, 230, 255, .2); }
+.tbox[readonly]:focus { border-color: var(--line2); box-shadow: none; }
+.cands { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow: auto; }
+.cand {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line2);
+  border-radius: 6px;
+  padding: 4px 7px;
+  cursor: pointer;
+  background: rgba(8, 13, 20, .5);
+}
+.cand:hover { border-color: var(--cyan2); }
+.cand.on { border-left-color: var(--cyan); background: rgba(63, 230, 255, .1); }
+.cand.off { cursor: default; opacity: .65; }
+.cand .src { font-family: var(--mono); font-size: 15px; color: var(--amber); }
+.cand .text { font-size: 12px; color: var(--dim); margin-top: 2px; }
+.cand .tag { font-size: 10px; letter-spacing: .1em; padding: 1px 5px; border-radius: 10px; border: 1px solid var(--line2); margin-left: 5px; }
+.cand .tag.near { color: var(--violet); border-color: var(--violet); }
+.cand .tag.edit { color: var(--green); border-color: var(--green); }
+.cand .tag.off { color: var(--dim); }
+#text-src { font-family: var(--mono); font-size: 14px; color: var(--amber); letter-spacing: .02em; }
+#text-src .near, .textcard .near { color: var(--violet); }
+
+/* ⚠️ One frame, whatever shape the floor is. The map used to be drawn at its natural height,
+   so a wide floor, a tall floor and "no map here" were three different heights -- and every
+   card below it jumped as you walked from one floor to the next. */
+.mapcard .map {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(0deg, rgba(63, 230, 255, .045) 0 1px, transparent 1px 15px),
+    repeating-linear-gradient(90deg, rgba(63, 230, 255, .045) 0 1px, transparent 1px 15px),
+    rgba(6, 10, 16, .45);
+}
+.map svg { width: 100%; height: 100%; min-height: 0; display: block; filter: drop-shadow(0 0 3px rgba(63, 230, 255, .35)); }
+.mapnone { padding: 0 16px; text-align: center; font-size: 12px; line-height: 1.45; }
+.mapnone .sigil { display: block; font-size: 26px; opacity: .5; margin-bottom: 8px; }
+.map .c { fill: #0a121c; }
+.map .c.seen { fill: #10202f; }
+.map .c.here { fill: #1d3346; }
+.map line { stroke-linecap: round; }
+.map .w { stroke: var(--cyan); stroke-width: 1.1; }
+.map .dr { stroke: var(--amber); stroke-width: 1.1; stroke-dasharray: 2 1.5; }
+.map .bl { stroke: var(--red); stroke-width: 1.3; }
+.map .u { stroke: #2a3f55; stroke-width: .6; stroke-dasharray: 1 1.5; }
+.map .ev { fill: var(--violet); }
+.map .star { fill: var(--amber); font-size: 7px; text-anchor: middle; }
+.map .me { fill: var(--amber); stroke: #fff; stroke-width: .5; filter: drop-shadow(0 0 2px var(--amber)); }
+.map .grid { stroke: rgba(63, 230, 255, .06); stroke-width: .3; }
+.legend { margin-top: 6px; font-size: 11px; color: var(--dim); display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.legend .lw { color: var(--cyan); } .legend .ld { color: var(--amber); } .legend .lb { color: var(--red); }
+.legend .le { color: var(--violet); } .legend .lk { color: var(--amber); } .legend .lm { color: var(--amber); }
+
+.slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.slots.autos { grid-template-columns: repeat(3, 1fr); }
+.slot {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(8, 13, 20, .6);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.slot .thumb {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: #070b10 center / cover no-repeat;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+}
+.slot .thumb .no {
+  position: absolute; left: 3px; top: 1px;
+  font-family: var(--mono); font-size: 16px; color: var(--cyan);
+  text-shadow: 0 0 4px #000, 0 0 2px #000;
+}
+.slot .meta { font-size: 10px; line-height: 1.25; color: var(--dim); min-height: 25px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot .meta b { color: var(--text); font-weight: 600; }
+.slot .btns { display: flex; gap: 3px; }
+.slot .btns button { flex: 1; padding: 2px 0; font-size: 11px; min-width: 0; }
+.note { font-size: 11px; color: var(--dim); margin: 8px 0 0; }
+
+/* ---- overlays ---- */
+.veil {
+  position: absolute; inset: 14px;
+  border-radius: 6px;
+  background: rgba(3, 6, 10, .78);
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(2px);
+  z-index: 5;
+}
+.veil-box { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; letter-spacing: .12em; }
+.spinner {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 2px solid rgba(63, 230, 255, .15);
+  border-top-color: var(--cyan);
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.pausetag {
+  position: absolute; top: 28px; right: 30px;
+  font-family: var(--mono); font-size: 28px; color: var(--amber);
+  text-shadow: 0 0 10px rgba(255, 181, 71, .8);
+  animation: blink 1.4s infinite;
+  pointer-events: none;
+}
+.capturehint {
+  position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: rgba(0, 0, 0, .6); padding: 4px 12px; border-radius: 20px; font-size: 12px; color: var(--dim);
+  pointer-events: none;
+}
+.hud { display: none; }
+.toasts { position: fixed; top: 58px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 20; }
+.toast {
+  background: var(--panel2);
+  border: 1px solid var(--line2);
+  border-left: 3px solid var(--cyan);
+  padding: 7px 14px;
+  border-radius: 6px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .6);
+  animation: tin .25s ease-out;
+}
+.toast.error { border-left-color: var(--red); }
+@keyframes tin { from { transform: translateY(-8px); opacity: 0; } }
+.modal { position: fixed; inset: 0; background: rgba(0, 0, 0, .6); display: flex; align-items: center; justify-content: center; z-index: 30; }
+.modal-box { background: var(--bg2); border: 1px solid var(--line2); border-radius: 12px; padding: 14px 18px; min-width: 460px; }
+.modal table { border-collapse: collapse; width: 100%; }
+.modal td { padding: 5px 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.modal td:first-child { color: var(--amber); white-space: nowrap; }
+
+/* ---- theater: the screen takes the window, telemetry becomes a HUD ---- */
+#app.theater .top, #app.theater .rail, #app.theater .padrow, #app.theater .textcard { display: none; }
+#app.theater main { grid-template-columns: 1fr; padding: 6px; }
+#app.theater .ctlbar { opacity: 0; transition: opacity .3s; position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 6; width: min(1100px, 96vw); }
+#app.theater.ctl .ctlbar, #app.theater .ctlbar:hover { opacity: 1; }
+#app.theater .bezel { padding: 8px; border-radius: 12px; }
+#app.theater .veil { inset: 8px; }
+#app.theater .hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  position: absolute; top: 18px; left: 18px; right: 18px;
+  pointer-events: none;
+  z-index: 4;
+}
+.hud-left { background: rgba(0, 0, 0, .55); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(63, 230, 255, .25); min-width: 210px; }
+.hud-hp { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 20px; }
+.hud-hp .bar { flex: 1; margin: 0; height: 9px; }
+.hud-chips { display: flex; gap: 10px; font-family: var(--mono); font-size: 18px; color: var(--amber); }
+.hud-map { width: 190px; aspect-ratio: 4 / 3; background: rgba(0, 0, 0, .5); border-radius: 8px; padding: 4px; border: 1px solid rgba(63, 230, 255, .2); }
+.hud-map svg { width: 100%; height: 100%; display: block; }
+.hud-map:empty { display: none; }
+.hud-map .c { fill: rgba(10, 18, 28, .6); } .hud-map .c.seen { fill: rgba(16, 32, 47, .7); } .hud-map .c.here { fill: rgba(29, 51, 70, .9); }
+.hud-map .w { stroke: var(--cyan); stroke-width: 1.1; } .hud-map .dr { stroke: var(--amber); stroke-width: 1.1; }
+.hud-map .bl { stroke: var(--red); stroke-width: 1.2; } .hud-map .u { stroke: none; } .hud-map .grid { stroke: none; }
+.hud-map .ev { fill: var(--violet); } .hud-map .star { fill: var(--amber); font-size: 7px; text-anchor: middle; }
+.hud-map .me { fill: var(--amber); stroke: #fff; stroke-width: .5; }
+
+@media (max-width: 1150px) {
+  body { overflow: auto; }
+  #app { height: auto; min-height: 100vh; }
+  main { grid-template-columns: 1fr; }
+  .stage { min-height: 60vh; }
+  .rail { overflow: visible; }
+}

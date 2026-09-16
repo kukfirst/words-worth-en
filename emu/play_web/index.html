@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Words Worth · Cockpit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Not render-blocking: a local cockpit must come up at once even with no internet. The page
+     starts in the fallback fonts and switches when these arrive. -->
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=VT323&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="play.css">
+</head>
+<body>
+<div id="app" class="offgame">
+  <header class="top">
+    <div class="brand">
+      <span class="sigil">◈</span>
+      <span class="title">WORDS&nbsp;WORTH</span>
+      <span class="sub">PC-98 · 1993 · COCKPIT</span>
+    </div>
+    <div class="where"><span class="k">LOCATION</span> <span id="scene-tag">—</span></div>
+    <div class="leds">
+      <span class="led" id="led-emu" title="Emulator process">EMU</span>
+      <span class="readout" id="fps" title="Frames per second the core runs at">--.- fps</span>
+      <span class="readout" id="speedtag">×1</span>
+      <span class="led" id="led-audio" title="Sound">AUDIO</span>
+      <span class="led" id="led-mem" title="Telemetry read from game memory">MEM</span>
+      <span class="led" id="led-link" title="Connection to the cockpit server">LINK</span>
+      <span class="readout dim" id="session" title="Time since the cockpit started">00:00</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="deck">
+      <div id="stage" class="stage">
+        <div class="bezel" id="bezel">
+          <canvas id="screen"></canvas>
+          <div id="hud" class="hud">
+            <div class="hud-left">
+              <div class="hud-hp"><div class="bar"><i id="hud-hpfill"></i></div><span id="hud-hp">--/--</span></div>
+              <div class="hud-chips"><span id="hud-lvl">LV --</span><span id="hud-gold">G --</span><span id="hud-scene">—</span></div>
+            </div>
+            <div class="hud-map" id="hud-map"></div>
+          </div>
+          <div id="veil" class="veil" hidden><div class="veil-box"><div class="spinner"></div><div id="veil-text">Connecting…</div><button id="veil-btn" hidden>Restart emulator</button></div></div>
+          <div id="pausetag" class="pausetag" hidden>PAUSED</div>
+          <div id="capturehint" class="capturehint" hidden>Mouse captured · Esc releases it</div>
+        </div>
+      </div>
+
+      <!-- ⚠️ One row, always. Everything that is only set once lives in the ⚙ popover instead of
+           wrapping the bar onto a second line: a taller bar steals height from the stage and
+           resizes the game picture under the player's hands. -->
+      <div class="ctlbar">
+        <div class="group" title="Game speed. Hold Tab for turbo.">
+          <div class="seg" id="speed">
+            <button data-speed="1">×1</button><button data-speed="2">×2</button><button data-speed="4">×4</button><button data-speed="0">MAX</button>
+          </div>
+          <button id="btn-pause" class="icon" title="Pause (F9)">⏸</button>
+        </div>
+        <div class="group">
+          <button id="btn-sound" class="icon" title="Sound on/off (plays at ×1 only)">🔊</button>
+          <input id="vol" type="range" min="0" max="100" value="70" title="Volume">
+        </div>
+        <div class="group">
+          <select id="filter" title="Screen filter (F7 cycles)"></select>
+          <div class="pophost">
+            <button id="btn-view" class="icon" title="Picture, scaling and mouse">⚙</button>
+            <div id="view-pop" class="pop" hidden>
+              <div class="pop-h">PICTURE</div>
+              <div id="sliders" class="sliders"></div>
+              <label class="prow"><span>Shape</span>
+                <select id="aspect" title="Picture shape">
+                  <option value="4:3">4:3 monitor</option>
+                  <option value="square">Square pixels</option>
+                </select>
+              </label>
+              <label class="prow" title="Scale by whole pixels only"><span>Integer scaling</span>
+                <input type="checkbox" id="intscale">
+              </label>
+              <label class="prow"><span>Mouse</span>
+                <select id="mouse-mode" title="How the mouse drives the game's cursor">
+                  <option value="pointer">point</option>
+                  <option value="capture">capture</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="group grind" title="Walks the floor and fights on its own. Stops on low HP, on a screen that eats input, or the moment you touch the controls.">
+          <button id="btn-grind">Autobattle</button>
+          <label class="chk">HP ≥ <input id="grind-hp" type="number" min="0" max="90" step="5" value="20"> %</label>
+          <span id="grind-info" class="dim"></span>
+        </div>
+        <div class="group push">
+          <button id="btn-shot" class="icon" title="Screenshot (F8)">📷</button>
+          <button id="btn-theater" class="icon" title="Theater mode (F10)">▣</button>
+          <button id="btn-full" class="icon" title="Full screen (F11)">⛶</button>
+          <button id="btn-help" class="icon" title="Keys (F1)">?</button>
+          <button id="btn-reboot" class="warn" title="Cold boot to the title menu">Reboot</button>
+        </div>
+      </div>
+
+      <div class="padrow">
+        <div class="pad" id="pad" title="On-screen keys: press and hold like the real ones">
+          <button data-key="up" class="u">▲</button>
+          <button data-key="left" class="l">◀</button>
+          <button data-key="down" class="d">▼</button>
+          <button data-key="right" class="r">▶</button>
+        </div>
+        <div class="acts">
+          <button data-key="space">SPACE</button>
+          <button data-key="return_key">ENTER</button>
+          <button data-key="escape">ESC</button>
+          <button data-key="z">Z</button>
+          <button data-key="x">X</button>
+        </div>
+        <div class="netinfo" id="netinfo"></div>
+      </div>
+
+      <!-- The line on screen IS the editor: one box, the size of the game's own message window
+           (56 columns x 4 rows), showing the line when there is nothing to edit and taking the
+           correction when there is. The alternatives and the refusal reasons open as overlays,
+           so nothing here can ever change the height of the deck. -->
+      <div class="card textcard">
+        <div class="card-h">
+          <button id="tc-fold" class="fold" title="Hide the line panel">▾</button>
+          <span class="tc-title">LINE ON SCREEN</span>
+          <button id="tc-hold" class="hold" title="Hold this line while the game goes on">⏸</button>
+          <span id="text-src" class="dim"></span>
+          <span id="tc-state" class="tc-state"></span>
+          <div class="pophost">
+            <button id="text-alt" class="alt" hidden>matches</button>
+            <div id="text-pop" class="pop up" hidden>
+              <div class="pop-h">WHICH ENTRY IS THIS LINE?</div>
+              <div id="text-cands" class="cands"></div>
+            </div>
+          </div>
+          <span class="grow"></span>
+          <div class="pophost">
+            <button id="text-why" class="why" hidden>refused</button>
+            <div id="why-pop" class="pop up" hidden></div>
+          </div>
+          <button id="text-save" class="save" disabled
+                  title="Write this line into your text/ pack. The game and the scripts are not touched.">Save</button>
+        </div>
+        <!-- PANEL_UX R2: one surface. Always this field, never swapped for anything else; it is
+             read-only until the line is identified, so a click while the game is still typing
+             the message out lands here and stays. -->
+        <div class="tbox-wrap">
+          <textarea id="text-en" class="tbox" spellcheck="true" readonly
+                    placeholder="nothing in the message window"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <aside class="rail">
+      <div class="card hero">
+        <div class="card-h"><span>HERO</span><span id="hero-state" class="dim"></span></div>
+        <div id="hero-name" class="names" title="One hero, two names: Astral in the first half, Pollux once Fabrice names him"></div>
+        <div class="hp">
+          <div class="hp-top"><span class="k">HP</span><span id="hp-text" class="big">--/--</span></div>
+          <div class="bar big"><i id="hp-fill"></i></div>
+        </div>
+        <div class="stats">
+          <div><span class="k">LEVEL</span><b id="lvl">--</b></div>
+          <div><span class="k">EXP</span><b id="exp">--</b></div>
+          <div><span class="k">STR</span><b id="str">--</b></div>
+          <div><span class="k">DEF</span><b id="def">--</b></div>
+          <div class="wide"><span class="k">GOLD</span><b id="gold">--</b></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span>INVENTORY</span></div>
+        <div id="items" class="items"></div>
+        <div id="equip" class="equip"></div>
+      </div>
+
+      <div class="card mapcard">
+        <div class="card-h"><span>MAP</span><span id="map-title" class="dim"></span></div>
+        <div id="map" class="map"><i class="dim">The map appears once you are in the dungeon.</i></div>
+        <div class="legend"><span class="lw">━</span> wall <span class="ld">┅</span> door <span class="lb">━</span> blocked <span class="le">●</span> event <span class="lk">★</span> key point <span class="lm">▶</span> you</div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span>SNAPSHOTS</span><span class="dim">F2 save · F4 load slot 1</span></div>
+        <div id="slots" class="slots"></div>
+        <div class="card-h sub"><span>AUTOMATIC · every 5 min in the dungeon</span></div>
+        <div id="autos" class="slots autos"></div>
+        <p class="note">Snapshots freeze the whole emulator. Your in-game saves (Save / Load 1–5) stay the real ones — keep using them.</p>
+      </div>
+    </aside>
+  </main>
+
+  <div id="toasts" class="toasts"></div>
+
+  <div id="help" class="modal" hidden>
+    <div class="modal-box">
+      <div class="card-h"><span>KEYS</span><button id="help-close" class="icon">✕</button></div>
+      <table>
+        <tr><td>Arrows, Space, Enter, Esc, letters</td><td>go to the game, held as long as you hold them</td></tr>
+        <tr><td>Mouse over the screen</td><td>the game's cursor follows; left / right click are the PC-98 buttons</td></tr>
+        <tr><td>Tab (hold)</td><td>turbo</td></tr>
+        <tr><td>F2 / F4</td><td>snapshot to / from slot 1</td></tr>
+        <tr><td>F7</td><td>next screen filter</td></tr>
+        <tr><td>F8</td><td>screenshot</td></tr>
+        <tr><td>F9 or Pause</td><td>pause</td></tr>
+        <tr><td>F10</td><td>theater mode</td></tr>
+        <tr><td>F11</td><td>full screen</td></tr>
+        <tr><td>F1</td><td>this help</td></tr>
+      </table>
+      <p class="note">Reloading or closing this page does not stop the game: it keeps running in the emulator process.</p>
+    </div>
+  </div>
+</div>
+<script src="crt.js"></script>
+<script src="play.js"></script>
+</body>
+</html>

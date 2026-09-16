@@ -11,6 +11,8 @@ work/
 en/
 units.json
 emu/text_index.json
+# built from text/ by the cockpit: the whole script again
+emu/text_index_pack.json
 progress.jsonl
 *.jsonl
 
@@ -28,6 +30,9 @@ emu/shots/
 emu/rec/
 emu/save/
 emu/system/
+# the floors this copy's cockpit has walked, and its snapshots
+emu/atlas.json
+emu/play_states/
 
 # the proofreading text export -- never committed
 text/

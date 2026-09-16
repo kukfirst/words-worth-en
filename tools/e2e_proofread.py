@@ -24,6 +24,7 @@ restore is verified, not assumed.
 """
 import hashlib
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -31,7 +32,9 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-PUB = pathlib.Path('/home/runekill/development/words-worth-en')
+# The public repository: WW_PUBLIC, or the clone next to this one (in the clone itself, that
+# is this very tree).
+PUB = pathlib.Path(os.environ.get('WW_PUBLIC') or ROOT.parent / 'words-worth-en').resolve()
 PY = sys.executable
 
 # Edits the run makes. (kind, how to change a line, should the checker refuse it)

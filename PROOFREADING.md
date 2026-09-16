@@ -91,7 +91,9 @@ engine has already printed something (usually a name) before your line starts, a
 that much less room on the first line.
 
 **4. Keep the `[Name]:` tag.** It is who is speaking, and it must stay, spelled exactly the
-same, with the same capital letter.
+same, with the same capital letter. `check.py` refuses a line whose tag was renamed, re-cased
+or dropped — including a one-letter slip like `[Innkeper]` — and so does the editor inside the
+game. Fix the English after the tag, not the tag.
 
 **5. The game is adult and blunt.** Explicit scenes, crude jokes, characters being unpleasant.
 That is the original — do not soften it. Fix the English, not the content.
@@ -118,6 +120,18 @@ Things that are **not** errors, please leave them:
 - The kana rows on the name-entry screen. That screen is how you type a name.
 
 ---
+
+## If you would rather read the lines in the game
+
+Optional, and a different kind of work: you can play the patched game in the cockpit that ships
+with this repository and fix a line **while looking at it on screen**, in its own context, with
+the same checks running before anything is written. That needs the game, an emulator core and a
+PC-98 BIOS of your own — everything the plain path above deliberately does not.
+
+**[→ emu/PROOFREADER.md](emu/PROOFREADER.md)** for the panel, **[emu/COCKPIT.md](emu/COCKPIT.md)**
+for installing and running the cockpit itself.
+
+Both paths write to the same place: your `text/*.json`. You can use either, or both.
 
 ## Sending it back
 

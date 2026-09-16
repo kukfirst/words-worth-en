@@ -7,7 +7,7 @@
 #
 #   tools/overnight.sh          # waits for PROOF-DONE and moves on
 set -u
-cd /home/runekill/development/wordsworth
+cd "$(dirname "$0")/.."
 L=/tmp/ww-night
 echo "=== start $(date +%H:%M) ===" > $L.log
 

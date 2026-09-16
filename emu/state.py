@@ -22,7 +22,7 @@ to walk the whole stack; the expensive rescan only runs when the anchor no longe
 
 Self-test: `.venv/bin/python state.py [some.state]`
 """
-import hashlib, os, pathlib
+import hashlib, os, pathlib, re
 import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -48,9 +48,16 @@ def _load_scripts():
     precisely the check such an experiment needs and which had to be done by hand before.
     """
     out = {}
-    for p in sorted(SCRIPTS.iterdir()):
-        if p.name.endswith(".rkt.mes"):
-            out[p.name[:-len(".rkt.mes")]] = p.read_bytes()
+    # ⚠️ No scripts at all is a NORMAL state, not an error: the public copy of this repository
+    # ships without `en/` (that is the translation itself), and someone playing the patch has
+    # only the game. Raising here killed every sensor in the play cockpit -- HP, coordinates,
+    # items and the map all died with it, though none of them reads a script; only identify()
+    # does, and it can honestly answer "I don't know" (caught 2026-09-16 by running the
+    # acceptance against the exported tree).
+    if SCRIPTS.is_dir():
+        for p in sorted(SCRIPTS.iterdir()):
+            if p.name.endswith(".rkt.mes"):
+                out[p.name[:-len(".rkt.mes")]] = p.read_bytes()
     if ORIGINALS.is_dir():
         for p in sorted(ORIGINALS.iterdir()):
             if p.name.endswith(".MES") and p.is_file():
@@ -614,6 +621,23 @@ def names(snap, base=SAVE_BASE):
         got = savenames.decode(bytes(snap[base + off:base + off + savenames.NAME_FIELD]))
         out[default] = got or None
     return out
+
+
+# ⚠️ ONE hero with two names. The save holds two name fields (`savenames.NAME_SLOTS`) because the
+# same man goes by two names: Astral, the Shadow Clan swordsman of the first half (floors 1-5,
+# the Shadow Clan shop, the opening), and -- after he loses his memory and turns up in town as "Nameless
+# Man" -- Pollux, the name Fabrice gives him (`KING.MES`: `(set-reg: 102 1)`). The scripts say
+# which one they mean: `"[" 0 "]:"` is Astral, `"[" 1 "]:"` is Pollux; the scene files split
+# cleanly along that line (tests/test_play.py checks it against en/ when en/ is there).
+FIRST_HALF = re.compile(r'FLOOR0[1-5]|FLOOR5A|SHP_4S|START1')
+NAMED_POLLUX = 102
+
+
+def hero(snap, scene, base=REG_BASE):
+    """Which of the hero's two names is his right now: 'Astral', 'Pollux', or None (nameless)."""
+    if scene and FIRST_HALF.match(scene):
+        return 'Astral'
+    return 'Pollux' if reg(snap, NAMED_POLLUX, base) else None
 
 
 def saved(flag_bytes):

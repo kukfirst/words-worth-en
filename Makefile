@@ -1,4 +1,4 @@
-.PHONY: help juice verify verify-full selftest check e2e patch release clean
+.PHONY: help juice verify verify-full selftest check e2e patch release play accept clean
 
 help:
 	@echo 'Words Worth - English translation, build targets'
@@ -7,6 +7,10 @@ help:
 	@echo '  make verify      layout, names, sizes, patch integrity, image build  (seconds)'
 	@echo '  make verify-full ...plus a full recompile and an emulator run        (~1 hour)'
 	@echo '  make selftest    break each defect class on a copy, prove the checks catch it'
+	@echo
+	@echo 'To play (see emu/COCKPIT.md - needs the np2kai core, a PC-98 BIOS and your image):'
+	@echo '  make play        start the cockpit at http://127.0.0.1:8778/'
+	@echo '  make accept      check the cockpit on your machine by running it'
 	@echo
 	@echo 'For proofreaders (see PROOFREADING.md - no game or build tools needed):'
 	@echo '  make check       check your edits in text/ - writes nothing'
@@ -31,6 +35,17 @@ selftest:
 # The one command a proofreader runs. Reads text/, writes nothing.
 check:
 	python3 tools/check.py
+
+# The play cockpit. WW_DISK is your own patched image, WW_SYSTEM your own PC-98 BIOS
+# directory -- neither ships here. Details and defaults: emu/COCKPIT.md
+play:
+	emu/play.sh
+
+# Acceptance by running: starts a cockpit of its own on a copy of your image.
+accept:
+	emu/.venv/bin/python emu/play_accept.py \
+	  --system $${WW_SYSTEM:?set WW_SYSTEM to your np2kai BIOS directory} \
+	  --disk $${WW_DISK:?set WW_DISK to your patched image}
 
 # Walks the whole proofreading loop on throwaway copies: pack -> clean clone -> edits ->
 # checker -> import. Proves the loop works for someone with nothing installed.

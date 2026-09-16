@@ -36,6 +36,13 @@ import gates                                                        # noqa: E402
 TEXT = ROOT / 'text'
 MARK = re.compile(r'\{(\d+)\}')
 SPEAKER = re.compile(r'^\s*\[([^\]]*)\]\s*:')
+NAME_ON_SCREEN = 'xxxxxx'        # what the export prints where the engine will put a name
+
+
+def _speaker(lines):
+    """The `[Name]` of the first line, or None when nobody is named."""
+    m = SPEAKER.match(lines[0] if lines else '')
+    return m.group(1) if m else None
 
 
 def problems(row):
@@ -62,6 +69,20 @@ def problems(row):
     tag = SPEAKER.match(en)
     if tag and '\n' in tag.group(1):
         out.append("the [Name]: tag is split across two lines")
+
+    # ⚠️ The table above promised this check since the beginning and nothing implemented it:
+    # only the split-tag case was caught, so renaming, re-casing or dropping the speaker went
+    # through in silence. `screen` is the line as it was EXPORTED -- the tag the game shipped
+    # with -- and the engine writes the hero's name where `{0}` stands, which the export shows
+    # as `xxxxxx`; compare like for like. When the engine has already printed something before
+    # this line (col != 0) the tag is not ours to judge.
+    if not screen_col:
+        was_tag = _speaker(row.get('screen') or [''])
+        now_tag = _speaker([MARK.sub(NAME_ON_SCREEN, en)])
+        if was_tag is not None and now_tag != was_tag:
+            became = f"[{now_tag}]" if now_tag is not None else "it is gone"
+            out.append(f"the [Name]: tag changed: [{was_tag}] -> {became}"
+                       " — that tag is who is speaking, and it must stay exactly as it is")
 
     why = flaws(screen(parts_of(en), w=None, col0=screen_col), col0=screen_col)
     if why:

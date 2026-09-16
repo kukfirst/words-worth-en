@@ -320,6 +320,22 @@ def step_isolation():
     return r.returncode == 0, (r.stdout.strip().splitlines() or ['no output'])[-1]
 
 
+def step_play():
+    # The play cockpit's own logic: input and protocol (test_play), the autobattle decisions
+    # (test_grind), and identifying a line on screen well enough to rewrite it (test_proofread).
+    # Every regression found while building it -- a click lost between two frames, a click too
+    # short for the engine, a click landing before the cursor, an aim that dragged the cursor
+    # back, a tap that lasted four times too long at x4 -- has a test there, each checked by
+    # breaking it. Running acceptance of the whole cockpit is emu/play_accept.py (~5 min).
+    if not (ROOT / 'emu/play.py').exists():
+        return True, 'skipped: not part of this copy'
+    r = subprocess.run([str(ROOT / 'emu/.venv/bin/python'), '-m', 'unittest',
+                        'tests.test_play', 'tests.test_grind', 'tests.test_proofread'],
+                       cwd=ROOT / 'emu', capture_output=True, text=True, timeout=180)
+    tail = (r.stderr.strip().splitlines() or ['no output'])
+    return r.returncode == 0, f'{tail[-3] if len(tail) >= 3 else tail[0]} {tail[-1]}'
+
+
 def step_no_russian():
     # The owner's rule (2026-09-15): we talk in Russian, but code, comments, printed messages,
     # UI and tool data are English. It took hours of translation passes to get there once.
@@ -373,7 +389,9 @@ if __name__ == '__main__':
     bad += run('patch and en/ match', step_patch)
     bad += run('build of the playable image', step_image)
     bad += run('patch at a foreign partition location', step_foreign)
-    bad += run('the live agent has its own emulator directory', step_isolation)
+    bad += run('the live agent and the play cockpit have their own emulator directories',
+               step_isolation)
+    bad += run('play cockpit: input and protocol', step_play)
     bad += run('no Russian in code, messages or UI', step_no_russian)
     if screens:
         bad += run('screens from frames', step_screens)

@@ -9,7 +9,7 @@
 # Teleport: the scene name sits at the start of the save slot (`FLAG0`) as an ASCII string, so
 # any room can be reached without playing through the story.
 set -u
-cd /home/runekill/development/wordsworth
+cd "$(dirname "$0")/.."
 OUT=/tmp/ww-acc
 rm -rf $OUT; mkdir -p $OUT
 : > $OUT/result.txt
