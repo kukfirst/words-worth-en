@@ -44,13 +44,13 @@ ACT_PAUSE = 0.55         # s after a key press before the next reading is truste
 # walking (found by the running acceptance, traced 2026-09-16: decision at 53.682, verdict at
 # 54.412). Nothing may be called stuck until the action has had this long to play out.
 STILL_AFTER = 2.0        # s at x1; scaled by the speed the game is running at
+GAME_FPS = 56.4          # PC-98 frame rate at x1
 MAX_SPEED = 15           # what "MAX" is worth when scaling waits (~850 fps / 56.4)
 # ⚠️ The first press after the game loads a save is SWALLOWED. Measured on floor 5A: tap up --
 # nothing, tap space -- nothing, the next tap up walked. So when the world did not change, retry
 # the MOVE first; nudging the screen with return_key/space (what the old agent did) cannot help
 # a keypress that simply never arrived, and autobattle gave up on a perfectly walkable cell.
 RETRY_MOVES = 2          # how many times the same move is repeated before nudging the screen
-RECENT = 8               # cells remembered, so a turn can prefer where we have not just been
 CUTSCENE_GRACE = 6       # how often a moving picture may excuse a world that is not moving
 # ⚠️ A press is counted in FRAMES, so it means the same at x1 and at MAX. Measured on floor 5A
 # from one saved spot: 8, 16 and 24 frames walk exactly ONE cell; 40 frames and more walk TWO --
@@ -90,7 +90,6 @@ class Grind:
         self._last_keys = None          # ...and what it was, in case the game swallowed it
         self._last_move = None          # the last STEP or TURN -- what a retry must repeat
         self._cutscene = 0              # times a moving picture excused a still world
-        self._recent = []               # cells we have just been in, oldest first
         self._changed_since = False     # did anything move since our last press?
         self._last_change_at = now or 0.0   # when the world last looked different
         self._cursor = None             # the game's own mouse cursor: a menu moves it
@@ -218,8 +217,6 @@ class Grind:
         self._stuck = 0
         self._cutscene = 0
         self._settled = here
-        if not self._recent or self._recent[-1] != (x, y):
-            self._recent = (self._recent + [(x, y)])[-RECENT:]
         step = STEP.get(f)
         ahead = (sides.get(f) in WALKABLE
                  and not (step and (x + step[0], y + step[1]) in self.avoid))
@@ -227,18 +224,12 @@ class Grind:
             self.steps += 1
             return self._act([('up', STEP_FRAMES)], now, move=True)
 
-        # ⚠️ Time to turn -- and NOT simply back. Turning back first makes a two-cell pendulum:
-        # traced on floor 5A, the hero walked between (12,3) and (13,3) for three minutes while
-        # two other open sides of the crossing were never tried. Prefer the way we have been in
-        # least recently; the way we just came from is the last resort.
-        def seen_ago(side):
-            s = STEP.get(side)
-            if not s:
-                return 99
-            cell = (x + s[0], y + s[1])
-            return self._recent.index(cell) if cell in self._recent else -1
-        ways = [d for d in range(4) if d != f and sides.get(d) in WALKABLE]
-        for want in sorted(ways, key=seen_ago):
+        # Time to turn: BACK first, so the hero paces one stretch of corridor -- that is what
+        # grinding is. ⚠️ A version that preferred the way it had been in least recently
+        # (2026-09-16) turned autobattle into a slow tour of the whole floor, reported by the
+        # owner the same evening. Other open sides are only for when the way back is shut.
+        back = (f + 2) % 4
+        for want in [back] + [d for d in range(4) if d not in (f, back)]:
             s = STEP.get(want)
             if s and (x + s[0], y + s[1]) in self.avoid:
                 continue
@@ -249,6 +240,14 @@ class Grind:
                 # like "nothing happened" and count as being stuck.
                 return self._act([('left', TURN_FRAMES)] * ((want - f) % 4), now, move=True)
         return self._act([('left', TURN_FRAMES)], now, move=True)   # boxed in: turn, look again
+
+    def key_gap(self, frames):
+        """Wall-clock wait after sending one key: the press itself plus a breath, at game speed.
+
+        ⚠️ The cockpit used to wait a fixed 0.55 s + frames/56.4 between keys whatever the speed,
+        so at MAX a back-turn (two presses) still took 1.5 s of a run that is meant to fly.
+        """
+        return (ACT_PAUSE + frames / GAME_FPS) * self._scale
 
     def _act(self, keys, now, move=False):
         """`keys` is a list of (key, frames): the game counts frames, so scripts must too.

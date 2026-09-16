@@ -145,17 +145,20 @@ class Walking(unittest.TestCase):
         self.assertEqual(d.decide(after), {'keys': [STEP]})
         self.assertIsNone(d.g.stopped)
 
-    def test_a_forced_turn_does_not_go_back_where_it_came_from(self):
-        """Traced on floor 5A: always turning back first made the hero pace between two cells
-        for three minutes while the other open sides of the crossing were never tried."""
+    def test_it_paces_one_stretch_instead_of_touring_the_floor(self):
+        """Grinding is walking back and forth along one line. A version that preferred unseen
+        sides at a crossing wandered the whole floor instead (reported by the owner,
+        2026-09-16)."""
+        d = Drive({'span': 2})
+        self.assertEqual(d.decide(read(x=5, facing=0)), {'keys': [STEP]})
+        self.assertEqual(d.decide(read(x=6, facing=0)), {'keys': [STEP]})
+        self.assertEqual(d.decide(read(x=7, facing=0)), {'keys': [TURN, TURN]},
+                         'span spent at an open crossing: turn back, not north or south')
+
+    def test_when_the_way_back_is_shut_it_takes_another_open_side(self):
         d = Drive()
-        self.assertEqual(d.decide(read(x=14, y=3, facing=2)), {'keys': [STEP]})
-        crossing = read(x=13, y=3, facing=2,
-                        sides={0: 'open', 1: 'open', 2: 'wall', 3: 'open'})   # wall ahead: turn
-        got = d.decide(crossing)
-        self.assertTrue(got.get('keys'), 'a wall ahead means a turn')
-        self.assertNotEqual(got['keys'], [TURN, TURN], 'east is where it just came from')
-        self.assertIn(len(got['keys']), (1, 3), 'so it turns north or south instead')
+        got = d.decide(read(facing=0, sides={0: 'wall', 1: 'open', 2: 'wall', 3: 'wall'}))
+        self.assertEqual(got, {'keys': [TURN]}, 'heading 0 -> 1 is one left turn')
 
     def test_an_avoided_cell_is_treated_as_a_wall(self):
         d = Drive({'avoid': [[6, 5]]})
@@ -314,6 +317,14 @@ class Pacing(unittest.TestCase):
         d.t += play_grind.ACT_PAUSE
         self.assertEqual(d.g.step(read(x=6), now=d.t), {}, 'one reading is not stillness')
         self.assertEqual(d.decide(read(x=6)), {'keys': [STEP]})
+
+    def test_the_gap_between_keys_shrinks_with_speed(self):
+        """A back-turn is two presses; at MAX they must not be 0.7 s apart."""
+        d = Drive()
+        d.decide(read(speed=1))
+        slow = d.g.key_gap(play_grind.TURN_FRAMES)
+        d.decide(read(x=6, speed=0))
+        self.assertAlmostEqual(d.g.key_gap(play_grind.TURN_FRAMES), slow / play_grind.MAX_SPEED)
 
     def test_at_higher_speed_it_waits_proportionally_less(self):
         slow, fast = Drive(), Drive()

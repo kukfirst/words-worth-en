@@ -657,8 +657,7 @@ class Hub:
                 if TRACE:
                     log.info('grind sends %s for %s frames', key, frames)
                 self.emu.send({'c': 'tap', 'k': key, 'frames': frames})
-                # the press itself takes `frames` of game time; give it that plus a breath
-                self._grind_at = now + play_grind.ACT_PAUSE + frames / 56.4
+                self._grind_at = now + self.grind.key_gap(frames)
             return
         if not tele.get('in_play'):
             return
