@@ -48,6 +48,12 @@ def relaid(en, padded=False, col0=0):
     carries `(number …)`, otherwise the form is split in two and the gate sees an extra `(TEXT )`.
     `col0` -- the column from which the form starts printing (`tools/column.py`).
     """
+    # ⚠️ A LEADING newline is a line break the author chose, not a wrap: it starts the tag on
+    # a fresh line after "That's 120 gold." Flattening it to a space let the layout break
+    # inside the tag instead ("[Armor Shop\nOwner]", 4 lines in the shops, 2026-09-17).
+    lead = len(en) - len(en.lstrip('\n'))
+    if lead:
+        return en[:lead] + relaid(en[lead:], padded, col0=0)
     flat = re.sub(r'  +', ' ', en.replace('\n', ' '))
     out = layout_text(flat, col0=col0)
     return pad_breaks(out, col0=col0) if padded else out

@@ -30,6 +30,14 @@ This clears 66 of FLOOR08's 71 stuck branches: nearly all its text sits in branc
 their own calls, and without nesting it couldn't be tightened by anything but damaging
 the text.
 
+⚠️⚠️ That experiment ended in a game over, so it never RETURNED. A win does, and it breaks:
+the engine keeps one file to return to, the battle call overwrites it with the companion's
+own name, and when the companion ends the engine reloads the companion at the parent's
+offset. After beating Delta (FLOOR08C) the game replayed her lines #8-#12 forever
+(2026-09-17). So a branch with a nested call must leave by jumping back into the parent:
+`way_home()` below, enforced by tools/checksplit.py and broken on purpose by
+tools/selftest.py.
+
 ⚠️ A side observation from the same experiment: after the split, `state.identify` names the
 floor as START.MES instead of FLOOR08.MES (companions and battles are identified
 correctly). So AFTER A SPLIT, the memory-based liveness check lies this way too -- read the
@@ -255,6 +263,33 @@ def companions(name):
     return sorted(set(out))
 
 
+# ⚠️ The engine keeps ONE file to return to. A branch that calls a battle from inside a
+# companion takes that slot, so the branch leaves by jumping back into the parent instead of
+# returning (tools/checksplit.py, "way home"). Those lines are ours, not the game's: each ends
+# with this marker so unsplit() can drop them before comparing against the original.
+WAY_HOME = '; way home'
+
+
+def way_home(parent, cell):
+    """Lines that end a battle branch inside a companion: set the cell, re-enter the parent.
+
+    Entrance register 121 = 15 matches none of the parent's entrances (0..7), so its preamble
+    keeps the cell written here into M22-24 instead of moving the hero to a staircase.
+    """
+    x, y, f = cell
+    return [f'(set-arr~ M 22 {x}) {WAY_HOME}', f'(set-arr~ M 23 {y}) {WAY_HOME}',
+            f'(set-arr~ M 24 {f}) {WAY_HOME}'], \
+           [f'(set-reg: 121 15) {WAY_HOME}', f'(mes-jump "{parent.lower()}") {WAY_HOME}']
+
+
+def strip_way_home(src):
+    """The companion text as the split wrote it: our way-home lines and comments removed."""
+    src = re.sub(r'\n[ \t]*\([^\n]*\) ' + re.escape(WAY_HOME) + r'(?=\n)', '', src)
+    src = re.sub(r'\n[ \t]*;;[^\n]*(?=\n)', '', src)
+    # the parens the insertion moved onto a line of their own go back where they were
+    return re.sub(r'\n[ \t]*(\)+)(?=\n|$)', r'\1', src)
+
+
 def unsplit(name):
     """The source as it would look without the split: branch bodies restored from companions.
 
@@ -272,7 +307,7 @@ def unsplit(name):
         for br in branches((EN / f'{c}.rkt').read_text(encoding='utf-8')):
             cs, ce = sexprs(br['src'], 1, len(br['src']) - 1)[0]
             key = re.sub(r'\s+', ' ', br['src'][cs:ce])
-            bodies[key] = br['src'][ce:-1]
+            bodies[key] = strip_way_home(br['src'][ce:-1])
     out, last, restored = [], 0, 0
     for br in branches(src):
         s, e = br['span']

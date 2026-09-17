@@ -14,9 +14,17 @@ What it catches:
 | no orphans | a companion with a branch the parent no longer calls -- dead code |
 | size | file over `gates.MES_MAX` |
 | names | a companion that is called but does not exist in `en/` |
+| way home | a companion branch that calls a battle and then just returns (see below) |
 
 ⚠️ This is the very check that would have caught the FLOOR05C overwrite on 2026-09-14: the companion would have
 kept one branch instead of seven, while the parent called it in seven places -- "no orphans" in reverse.
+
+⚠️ WAY HOME. The engine remembers ONE file to return to, not a stack. A companion that
+calls a battle itself (`mes-call "sento0g.mes"`) overwrites that slot with its own name, so
+when the companion ends, the engine reloads the COMPANION instead of the parent and resumes
+at the parent's offset inside it. On FLOOR08C that replayed Delta's lines #8-#12 forever
+after the win (2026-09-17). The game itself never nests a call; our splits did, twice. Such a
+branch must leave by `(mes-jump "<parent>")` after its last call.
 
     tools/checksplit.py            # all pairs
     tools/checksplit.py FLOOR08.MES
@@ -73,7 +81,15 @@ def check(name):
         # their conditions were written by elf, and they don't need to match the parent's
         if (EN / f'{callee}.orig.rkt').exists():
             continue
-        have = set(conds(comp.read_text(encoding='utf-8')))
+        comp_src = comp.read_text(encoding='utf-8')
+        home = f'(mes-jump "{name.lower()}")'
+        for br in split.branches(comp_src) if '(cond' in comp_src else []:
+            body = br['src']
+            last = max((m.end() for m in re.finditer(r'\(mes-call "', body)), default=-1)
+            if last >= 0 and home not in body[last:]:
+                bad.append(f'{callee}: branch «{br["label"][:40]}» calls a script but returns '
+                           f'without {home} -- the engine loses the way back to {name}')
+        have = set(conds(comp_src))
         for c in sorted(need - have):
             bad.append(f'{callee}: parent calls under «{c[:56]}», but no such branch exists in the satellite')
         for c in sorted(have - need):

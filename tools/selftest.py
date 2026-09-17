@@ -92,6 +92,18 @@ def break_split():
     return None
 
 
+def break_way_home():
+    """A companion that calls a battle and then just returns (the Delta loop, 2026-09-17)."""
+    import split
+    for p in sorted(EN.glob('*.MES.rkt')):
+        s = p.read_text(encoding='utf-8')
+        m = re.search(r'\n[ \t]*\(mes-jump "[^"]+"\) ' + re.escape(split.WAY_HOME), s)
+        if m and not (EN / f'{p.name[:-4]}.orig.rkt').exists():
+            p.write_text(s[:m.start()] + s[m.end():], encoding='utf-8')
+            return f'{p.name}: jump back to the parent removed after a battle'
+    return None
+
+
 def break_size():
     """File past the threshold. We corrupt the COMPILED .mes: `step_size` points exactly at it,
     and a rebuild just for a test would cost twenty minutes."""
@@ -165,6 +177,7 @@ CASES = {
     'encoding':  (break_charset,       'audit', 'encoding'),
     'layout':    (break_layout,        'verify:step_layout', 'layout defects: '),
     'split':     (break_split,         'verify:step_split', 'no such branch'),
+    'way home':  (break_way_home,      'verify:step_split', 'loses the way back'),
     'size':      (break_size,          'verify:step_size', 'past threshold'),
     'names':     (break_terms,         'verify:step_terms', 'mismatch'),
     'missing':   (break_text_loss,     'audit', 'emptied'),

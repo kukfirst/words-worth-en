@@ -1,5 +1,5 @@
 Words Worth (elf, PC-98, 1993) - English translation
-V 1.1 - 15/09/26
+V 1.2 - 17/09/26
 
 Words Worth is elf's first-person dungeon RPG from 1993, set in a world split between the
 Light Clan and the Shadow Clan, each convinced the other has been lying about the same stone
@@ -42,14 +42,14 @@ is nothing an older patcher cannot read:
   - Windows: xdelta UI or Delta Patcher - drop the image and the patch onto it.
   - Linux or macOS, command line:
 
-    xdelta3 -d -s "Words Worth.hdi" words-worth-en-v1-1.xdelta "Words Worth (EN).hdi"
+    xdelta3 -d -s "Words Worth.hdi" words-worth-en-v1-2.xdelta "Words Worth (EN).hdi"
 
 If a patcher says "unavailable secondary compressor", you have the first v1.1 upload, which
 was compressed in a way older patchers cannot read. Download the zip again.
 
 The result is:
 
-    Words Worth (EN).hdi  CRC32 646EA627  MD5 a863bb9533cd753584c229d92d6d5472
+    Words Worth (EN).hdi  CRC32 C3D13E80  MD5 06e5cc284a40b509a4a28fee1f2db38e
 
 Patch a FRESH image, not one you have played. The five save slots carry the hero's name, which
 the engine substitutes into dialogue at runtime, so the patch has to rewrite those fields -
@@ -69,6 +69,20 @@ WHAT IS AND IS NOT TRANSLATED
 - Equipment reads DAGGAR, BASTERD, PATTD ARMOR and so on. Those are elf's own romanisations
   in the Japanese original, printed by the game itself, not translation errors. They are left
   exactly as the authors wrote them.
+
+WHAT CHANGED IN 1.2
+- Two boss fights no longer trap the game in a loop. After beating Delta on floor 8, v1.1
+  replayed her introduction forever ("I'll at least tell you my name" ... "I'll beat you to a
+  pulp!!") with no way out. Raffin on floor 10 has the same flaw. Both scenes had been moved
+  into companion files in 1.1 and started the battle from inside them; the engine remembers
+  only one script to return to, so the battle made it forget the floor. Now both scenes go
+  back to the floor directly after the fight - won or fled. No wording was changed.
+- One shop line in the Dark Merchant's store is re-wrapped.
+
+If you are stuck in that loop: load a save from before the fight and play it again on 1.2.
+Your saves live inside the image, in the WW folder as FLAG0 to FLAG4. To keep them, copy
+those five files from your old image into the newly patched one with any disk image tool
+(DiskExplorer on Windows, mtools elsewhere).
 
 WHAT CHANGED IN 1.1
 - A crash is fixed. In v1.0 the game could drop to the DOS prompt - the second Silvanna

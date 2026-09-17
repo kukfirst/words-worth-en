@@ -11,9 +11,9 @@ gameplay and polygon dungeons — and that patch is itself partial.
 
 | | |
 |---|---|
-| **Download** | [`dist/words-worth-en-v1-1.zip`](dist/words-worth-en-v1-1.zip) — one xdelta patch and a readme |
+| **Download** | [`dist/words-worth-en-v1-2.zip`](dist/words-worth-en-v1-2.zip) — one xdelta patch and a readme |
 | Applies to | `Words Worth.hdi` — 20 955 136 bytes, CRC32 `8AE7E6F1`, MD5 `6b3855cece879cbba2ae9bded06deef1` (the Neo Kobe copy) |
-| Produces | CRC32 `646EA627`, SHA-1 `bc2b15740785e609056d44695d8f2df64d99679c`, with all five save slots empty |
+| Produces | CRC32 `C3D13E80`, SHA-1 `eeb2dfc33437eb2f10fd05727fcf92a2501c851c`, with all five save slots empty |
 | Emulator | Neko Project II kai (np2kai), standalone or the libretro core |
 
 Also on [GBAtemp](https://gbatemp.net/download/pc-98-words-worth-english-patch.40017/).
@@ -22,6 +22,13 @@ Also on [GBAtemp](https://gbatemp.net/download/pc-98-words-worth-english-patch.4
 non-consensual, and the attitudes that came with early-90s eroge. Everything is translated
 plainly — nothing is censored or softened. 18+.
 
+> **v1.1 could trap the game in a loop after two boss fights and is superseded.** Beating
+> Delta on floor 8 replayed her introduction forever; Raffin on floor 10 has the same flaw.
+> Both scenes had been moved into companion files and started their battle from inside them,
+> and the engine remembers only one script to return to. v1.2 sends both scenes straight back
+> to the floor after the fight, won or fled, with no wording changed. Stuck on v1.1? Load a
+> save from before the fight; the readme explains how to carry saves over.
+>
 > **v1.0 could crash to the DOS prompt and is superseded.** Ten scripts had outgrown the
 > engine's script buffer; the second Silvanna scene on floor 2 killed the game reliably.
 > Fixed in v1.1 by splitting each oversized script into a parent plus a companion file —
